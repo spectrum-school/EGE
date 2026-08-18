@@ -596,7 +596,6 @@ with tab1:
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=0, b=40),
-        # Отключаем масштабирование
         dragmode=False,
         modebar=dict(
             remove=['zoomIn2d', 'zoomOut2d', 'pan2d', 'resetScale2d', 'autoScale2d']
@@ -610,7 +609,7 @@ with tab1:
         'scrollZoom': False
     }
     
-    st.plotly_chart(fig, width='stretch', config=config)
+    st.plotly_chart(fig, use_container_width=True, config=config)
     
     # Легенда
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -641,7 +640,7 @@ with tab1:
         })
     
     df_details = pd.DataFrame(details_data)
-    st.dataframe(df_details, width='stretch', hide_index=True)
+    st.dataframe(df_details, use_container_width=True, hide_index=True)
 
 # ==================== TAB 2: ПРОГРЕСС ====================
 with tab2:
@@ -712,7 +711,6 @@ with tab2:
                 paper_bgcolor='rgba(0,0,0,0)',
                 hovermode='x unified',
                 legend=dict(font=dict(size=12)),
-                # Отключаем масштабирование
                 dragmode=False,
                 modebar=dict(
                     remove=['zoomIn2d', 'zoomOut2d', 'pan2d', 'resetScale2d', 'autoScale2d']
@@ -726,7 +724,7 @@ with tab2:
                 'scrollZoom': False
             }
             
-            st.plotly_chart(fig_progress, width='stretch', config=config)
+            st.plotly_chart(fig_progress, use_container_width=True, config=config)
             
             # Дополнительная статистика
             col1, col2, col3 = st.columns(3)
@@ -927,7 +925,6 @@ with tab4:
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             showlegend=False,
-            # Отключаем масштабирование
             dragmode=False,
             modebar=dict(
                 remove=['zoomIn2d', 'zoomOut2d', 'pan2d', 'resetScale2d', 'autoScale2d']
@@ -941,7 +938,7 @@ with tab4:
             'scrollZoom': False
         }
         
-        st.plotly_chart(fig_rank, width='stretch', config=config)
+        st.plotly_chart(fig_rank, use_container_width=True, config=config)
         
         # Статистика
         col1, col2, col3, col4 = st.columns(4)
