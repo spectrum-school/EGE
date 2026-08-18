@@ -246,62 +246,6 @@ st.markdown("""
         }
     }
 </style>
-
-<script>
-    // Функции для работы с localStorage
-    function saveStudent(name) {
-        try {
-            localStorage.setItem('ege_selected_student', name);
-            console.log('Сохранён ученик:', name);
-        } catch(e) {
-            console.log('Ошибка сохранения:', e);
-        }
-    }
-    
-    function loadStudent() {
-        try {
-            return localStorage.getItem('ege_selected_student');
-        } catch(e) {
-            console.log('Ошибка загрузки:', e);
-            return null;
-        }
-    }
-    
-    // Восстанавливаем выбранного ученика при загрузке страницы
-    document.addEventListener('DOMContentLoaded', function() {
-        const saved = loadStudent();
-        console.log('Загружен ученик из localStorage:', saved);
-        
-        if (saved) {
-            // Ищем все select элементы на странице
-            setTimeout(function() {
-                const selects = document.querySelectorAll('select');
-                selects.forEach(function(select) {
-                    const options = select.querySelectorAll('option');
-                    options.forEach(function(option) {
-                        // Сравниваем текст опции с сохранённым именем
-                        if (option.text.trim() === saved.trim()) {
-                            select.value = option.value;
-                            // Создаём событие изменения
-                            const event = new Event('change', { bubbles: true });
-                            select.dispatchEvent(event);
-                            console.log('Восстановлен выбор:', saved);
-                        }
-                    });
-                });
-            }, 500); // Небольшая задержка для загрузки Streamlit
-        }
-    });
-    
-    // Сохраняем выбор при изменении
-    document.addEventListener('change', function(e) {
-        if (e.target.tagName === 'SELECT') {
-            const selected = e.target.options[e.target.selectedIndex].text;
-            saveStudent(selected);
-            console.log('Выбран и сохранён:', selected);
-        }
-    });
-</script>
 """, unsafe_allow_html=True)
 
 # ID вашей таблицы
@@ -375,14 +319,15 @@ student_name_col = 'ФИО' if 'ФИО' in students_df.columns else students_df.
 task_id_col = 'id' if 'id' in tasks_df.columns else tasks_df.columns[0]
 task_cols = [c for c in tasks_df.columns if c != task_id_col and c != 'date']
 
-# Выбор ученика с localStorage
+# Выбор ученика с сохранением в localStorage через session_state
 st.sidebar.markdown("---")
 st.sidebar.subheader("👤 Ученик")
 students_list = students_df[student_name_col].tolist()
 
 # Инициализация session_state для хранения текущего выбора
 if 'selected_student' not in st.session_state:
-    # Пытаемся получить из session_state, если нет - берём первого
+    # Пытаемся получить из localStorage через параметры URL (передаём через query params)
+    # По умолчанию берём первого ученика
     st.session_state.selected_student = students_list[0] if students_list else None
 
 # Определяем индекс для selectbox
@@ -400,10 +345,55 @@ selected_student = st.sidebar.selectbox(
 )
 
 # Сохраняем выбранного ученика в session_state
-st.session_state.selected_student = selected_student
+if selected_student != st.session_state.selected_student:
+    st.session_state.selected_student = selected_student
+    # Сохраняем в localStorage через JavaScript
+    st.markdown(f"""
+    <script>
+        try {{
+            localStorage.setItem('ege_selected_student', '{selected_student}');
+            console.log('Сохранён ученик:', '{selected_student}');
+        }} catch(e) {{
+            console.log('Ошибка сохранения:', e);
+        }}
+    </script>
+    """, unsafe_allow_html=True)
 
-# JavaScript для восстановления выбора из localStorage при загрузке
-# (добавлен в блок st.markdown выше)
+# Восстановление из localStorage при загрузке
+if 'restored_from_localstorage' not in st.session_state:
+    st.session_state.restored_from_localstorage = True
+    st.markdown("""
+    <script>
+        try {
+            const saved = localStorage.getItem('ege_selected_student');
+            if (saved) {
+                console.log('Восстановлен ученик из localStorage:', saved);
+                // Передаём в Streamlit через query parameters
+                const url = new URL(window.location);
+                url.searchParams.set('student', saved);
+                window.history.replaceState({}, '', url);
+                // Перезагружаем страницу для применения
+                // Используем setTimeout чтобы избежать бесконечного цикла
+                setTimeout(() => {
+                    if (!window.location.search.includes('restored=true')) {
+                        window.location.search = '?restored=true&student=' + encodeURIComponent(saved);
+                    }
+                }, 100);
+            }
+        } catch(e) {
+            console.log('Ошибка загрузки из localStorage:', e);
+        }
+    </script>
+    """, unsafe_allow_html=True)
+
+# Проверяем параметры URL для восстановления
+import urllib.parse
+query_params = st.query_params
+if 'student' in query_params and query_params['student'] != st.session_state.selected_student:
+    saved_student = query_params['student']
+    if saved_student in students_list:
+        st.session_state.selected_student = saved_student
+        st.rerun()
 
 student_row = students_df[students_df[student_name_col] == selected_student]
 if student_row.empty:
