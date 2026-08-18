@@ -9,7 +9,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Прогресс ЕГЭ", layout="wide")
 
-# Принудительно светлая тема и отключение масштабирования графиков
+# CSS и JavaScript с localStorage
 st.markdown("""
 <style>
     /* Принудительно светлая тема для всех элементов */
@@ -248,14 +248,59 @@ st.markdown("""
 </style>
 
 <script>
-    // Принудительно удаляем классы тёмной темы
-    document.body.classList.remove('dark-theme');
-    const app = document.querySelector('.stApp');
-    if (app) app.classList.remove('dark-theme');
-    const main = document.querySelector('.main');
-    if (main) main.classList.remove('dark-theme');
-    const container = document.querySelector('.block-container');
-    if (container) container.classList.remove('dark-theme');
+    // Функции для работы с localStorage
+    function saveStudent(name) {
+        try {
+            localStorage.setItem('ege_selected_student', name);
+            console.log('Сохранён ученик:', name);
+        } catch(e) {
+            console.log('Ошибка сохранения:', e);
+        }
+    }
+    
+    function loadStudent() {
+        try {
+            return localStorage.getItem('ege_selected_student');
+        } catch(e) {
+            console.log('Ошибка загрузки:', e);
+            return null;
+        }
+    }
+    
+    // Восстанавливаем выбранного ученика при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        const saved = loadStudent();
+        console.log('Загружен ученик из localStorage:', saved);
+        
+        if (saved) {
+            // Ищем все select элементы на странице
+            setTimeout(function() {
+                const selects = document.querySelectorAll('select');
+                selects.forEach(function(select) {
+                    const options = select.querySelectorAll('option');
+                    options.forEach(function(option) {
+                        // Сравниваем текст опции с сохранённым именем
+                        if (option.text.trim() === saved.trim()) {
+                            select.value = option.value;
+                            // Создаём событие изменения
+                            const event = new Event('change', { bubbles: true });
+                            select.dispatchEvent(event);
+                            console.log('Восстановлен выбор:', saved);
+                        }
+                    });
+                });
+            }, 500); // Небольшая задержка для загрузки Streamlit
+        }
+    });
+    
+    // Сохраняем выбор при изменении
+    document.addEventListener('change', function(e) {
+        if (e.target.tagName === 'SELECT') {
+            const selected = e.target.options[e.target.selectedIndex].text;
+            saveStudent(selected);
+            console.log('Выбран и сохранён:', selected);
+        }
+    });
 </script>
 """, unsafe_allow_html=True)
 
@@ -326,18 +371,39 @@ if students_df.empty or tasks_df.empty:
 # Определяем колонки
 student_id_col = 'id' if 'id' in students_df.columns else students_df.columns[0]
 student_name_col = 'ФИО' if 'ФИО' in students_df.columns else students_df.columns[1]
+
 task_id_col = 'id' if 'id' in tasks_df.columns else tasks_df.columns[0]
 task_cols = [c for c in tasks_df.columns if c != task_id_col and c != 'date']
 
-# Выбор ученика
+# Выбор ученика с localStorage
 st.sidebar.markdown("---")
 st.sidebar.subheader("👤 Ученик")
 students_list = students_df[student_name_col].tolist()
+
+# Инициализация session_state для хранения текущего выбора
+if 'selected_student' not in st.session_state:
+    # Пытаемся получить из session_state, если нет - берём первого
+    st.session_state.selected_student = students_list[0] if students_list else None
+
+# Определяем индекс для selectbox
+try:
+    current_index = students_list.index(st.session_state.selected_student)
+except ValueError:
+    current_index = 0
+    st.session_state.selected_student = students_list[0] if students_list else None
+
 selected_student = st.sidebar.selectbox(
     "Выберите ученика",
     students_list,
+    index=current_index,
     label_visibility="collapsed"
 )
+
+# Сохраняем выбранного ученика в session_state
+st.session_state.selected_student = selected_student
+
+# JavaScript для восстановления выбора из localStorage при загрузке
+# (добавлен в блок st.markdown выше)
 
 student_row = students_df[students_df[student_name_col] == selected_student]
 if student_row.empty:
