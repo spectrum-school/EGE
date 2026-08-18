@@ -9,7 +9,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Прогресс ЕГЭ", layout="wide")
 
-# CSS и JavaScript с localStorage
+# CSS и JavaScript с localStorage (упрощённая версия)
 st.markdown("""
 <style>
     /* Принудительно светлая тема для всех элементов */
@@ -248,43 +248,50 @@ st.markdown("""
 </style>
 
 <script>
-    // Функция для сохранения в localStorage
+    // Простое сохранение в localStorage
     function saveStudent(name) {
         try {
             localStorage.setItem('ege_selected_student', name);
             console.log('✅ Сохранён:', name);
-            return true;
         } catch(e) {
-            console.log('❌ Ошибка сохранения:', e);
-            return false;
+            console.log('❌ Ошибка:', e);
         }
     }
     
-    // Функция для загрузки из localStorage
-    function loadStudent() {
+    // Простое чтение из localStorage
+    function getStudent() {
         try {
-            const name = localStorage.getItem('ege_selected_student');
-            console.log('📥 Загружен из localStorage:', name);
-            return name;
+            return localStorage.getItem('ege_selected_student');
         } catch(e) {
-            console.log('❌ Ошибка загрузки:', e);
             return null;
         }
     }
     
-    // При загрузке страницы проверяем localStorage
-    window.onload = function() {
-        const saved = loadStudent();
+    // При загрузке страницы восстанавливаем выбор
+    document.addEventListener('DOMContentLoaded', function() {
+        const saved = getStudent();
         if (saved) {
-            // Добавляем параметр в URL если его нет
-            const url = new URL(window.location);
-            if (!url.searchParams.has('student')) {
-                url.searchParams.set('student', encodeURIComponent(saved));
-                window.history.replaceState({}, '', url);
-                // Перезагружаем страницу для применения
-                window.location.reload();
-            }
+            console.log('📥 Восстановлен:', saved);
+            // Отправляем в Streamlit через скрытое поле
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.id = 'restored_student';
+            input.value = saved;
+            document.body.appendChild(input);
         }
+    });
+    
+    // Функция для сохранения при выборе
+    window.saveSelected = function(name) {
+        saveStudent(name);
+        // Добавляем параметр в URL без перезагрузки
+        const url = new URL(window.location);
+        url.searchParams.set('student', encodeURIComponent(name));
+        window.history.replaceState({}, '', url);
+        // Обновляем страницу через 100мс
+        setTimeout(() => {
+            window.location.reload();
+        }, 100);
     };
 </script>
 """, unsafe_allow_html=True)
@@ -360,14 +367,14 @@ student_name_col = 'ФИО' if 'ФИО' in students_df.columns else students_df.
 task_id_col = 'id' if 'id' in tasks_df.columns else tasks_df.columns[0]
 task_cols = [c for c in tasks_df.columns if c != task_id_col and c != 'date']
 
-# ==================== ПОЛУЧАЕМ СПИСОК УЧЕНИКОВ ====================
+# Получаем список учеников
 students_list = students_df[student_name_col].tolist()
 
-# ==================== РАБОТА С localStorage ====================
+# ==================== ВОССТАНОВЛЕНИЕ ИЗ localStorage ====================
 
 # Инициализация session_state
 if 'selected_student' not in st.session_state:
-    # Проверяем параметры URL
+    # Проверяем параметры URL (приходят из JavaScript)
     query_params = st.query_params
     saved_from_url = query_params.get('student', None)
     
@@ -401,13 +408,13 @@ selected_student = st.sidebar.selectbox(
 # Если выбор изменился - сохраняем
 if selected_student != st.session_state.selected_student:
     st.session_state.selected_student = selected_student
-    # Сохраняем в localStorage через JavaScript с перезагрузкой
+    # Сохраняем в localStorage через JavaScript
     st.markdown(f"""
     <script>
         try {{
             localStorage.setItem('ege_selected_student', '{selected_student}');
             console.log('✅ Сохранён ученик:', '{selected_student}');
-            // Перезагружаем страницу с параметром
+            // Добавляем параметр в URL и перезагружаем
             const url = new URL(window.location);
             url.searchParams.set('student', encodeURIComponent('{selected_student}'));
             window.location.href = url.toString();
