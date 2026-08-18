@@ -246,6 +246,47 @@ st.markdown("""
         }
     }
 </style>
+
+<script>
+    // Функция для сохранения в localStorage
+    function saveStudent(name) {
+        try {
+            localStorage.setItem('ege_selected_student', name);
+            console.log('✅ Сохранён:', name);
+            return true;
+        } catch(e) {
+            console.log('❌ Ошибка сохранения:', e);
+            return false;
+        }
+    }
+    
+    // Функция для загрузки из localStorage
+    function loadStudent() {
+        try {
+            const name = localStorage.getItem('ege_selected_student');
+            console.log('📥 Загружен из localStorage:', name);
+            return name;
+        } catch(e) {
+            console.log('❌ Ошибка загрузки:', e);
+            return null;
+        }
+    }
+    
+    // При загрузке страницы проверяем localStorage
+    window.onload = function() {
+        const saved = loadStudent();
+        if (saved) {
+            // Добавляем параметр в URL если его нет
+            const url = new URL(window.location);
+            if (!url.searchParams.has('student')) {
+                url.searchParams.set('student', encodeURIComponent(saved));
+                window.history.replaceState({}, '', url);
+                // Перезагружаем страницу для применения
+                window.location.reload();
+            }
+        }
+    };
+</script>
 """, unsafe_allow_html=True)
 
 # ID вашей таблицы
@@ -319,92 +360,24 @@ student_name_col = 'ФИО' if 'ФИО' in students_df.columns else students_df.
 task_id_col = 'id' if 'id' in tasks_df.columns else tasks_df.columns[0]
 task_cols = [c for c in tasks_df.columns if c != task_id_col and c != 'date']
 
+# ==================== ПОЛУЧАЕМ СПИСОК УЧЕНИКОВ ====================
+students_list = students_df[student_name_col].tolist()
+
 # ==================== РАБОТА С localStorage ====================
 
 # Инициализация session_state
 if 'selected_student' not in st.session_state:
-    st.session_state.selected_student = None
-
-# JavaScript для работы с localStorage (вставляем в HTML)
-st.markdown("""
-<script>
-    // Функция для сохранения в localStorage
-    function saveStudent(name) {
-        try {
-            localStorage.setItem('ege_selected_student', name);
-            console.log('✅ Сохранён:', name);
-            return true;
-        } catch(e) {
-            console.log('❌ Ошибка сохранения:', e);
-            return false;
-        }
-    }
+    # Проверяем параметры URL
+    query_params = st.query_params
+    saved_from_url = query_params.get('student', None)
     
-    // Функция для загрузки из localStorage
-    function loadStudent() {
-        try {
-            const name = localStorage.getItem('ege_selected_student');
-            console.log('📥 Загружен из localStorage:', name);
-            return name;
-        } catch(e) {
-            console.log('❌ Ошибка загрузки:', e);
-            return null;
-        }
-    }
-    
-    // При загрузке страницы отправляем сохранённое значение в Streamlit
-    function sendSavedStudent() {
-        const saved = loadStudent();
-        if (saved) {
-            // Создаём скрытый элемент для передачи данных
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.id = 'saved_student';
-            input.value = saved;
-            document.body.appendChild(input);
-            
-            // Отправляем событие
-            const event = new CustomEvent('student_loaded', { 
-                detail: { student: saved } 
-            });
-            document.dispatchEvent(event);
-        }
-    }
-    
-    // Выполняем при загрузке
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', sendSavedStudent);
-    } else {
-        sendSavedStudent();
-    }
-    
-    // Функция для сохранения при выборе ученика
-    window.saveSelectedStudent = function(name) {
-        saveStudent(name);
-        // Отправляем событие в Streamlit через URL параметр
-        const url = new URL(window.location);
-        url.searchParams.set('student', encodeURIComponent(name));
-        window.history.replaceState({}, '', url);
-        // Перезагружаем страницу для применения
-        setTimeout(() => {
-            window.location.reload();
-        }, 200);
-    };
-</script>
-""", unsafe_allow_html=True)
-
-# Проверяем параметры URL для восстановления
-query_params = st.query_params
-saved_from_url = query_params.get('student', None)
-
-# Проверяем session_state
-if saved_from_url and saved_from_url in students_list:
-    st.session_state.selected_student = saved_from_url
-    st.query_params.clear()  # Очищаем параметры после использования
-
-# Если в session_state ничего нет, берём первого
-if st.session_state.selected_student is None or st.session_state.selected_student not in students_list:
-    st.session_state.selected_student = students_list[0] if students_list else None
+    if saved_from_url and saved_from_url in students_list:
+        st.session_state.selected_student = saved_from_url
+        # Очищаем параметры после использования
+        st.query_params.clear()
+    else:
+        # Если ничего нет - берём первого
+        st.session_state.selected_student = students_list[0] if students_list else None
 
 # ==================== ВЫБОР УЧЕНИКА ====================
 
