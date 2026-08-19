@@ -6,10 +6,12 @@ import requests
 import io
 import numpy as np
 from datetime import datetime
+import hashlib
+import base64
 
 st.set_page_config(page_title="Прогресс ЕГЭ", layout="wide")
 
-# CSS и JavaScript с localStorage (упрощённая версия)
+# CSS для светлой темы и стилей уровня
 st.markdown("""
 <style>
     /* Принудительно светлая тема для всех элементов */
@@ -53,6 +55,53 @@ st.markdown("""
         font-size: 14px;
         color: #9ca3af !important;
         margin-top: 4px;
+    }
+    
+    /* Стили для уровня успеваемости с цветовой градацией */
+    .level-container {
+        display: inline-block;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 28px !important;
+        font-weight: bold !important;
+        margin: 5px 0;
+        min-width: 200px;
+        text-align: center;
+    }
+    
+    .level-excellent {
+        background: linear-gradient(135deg, #10b981, #059669) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    }
+    
+    .level-good {
+        background: linear-gradient(135deg, #34d399, #059669) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(52, 211, 153, 0.3);
+    }
+    
+    .level-medium {
+        background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+        color: #1f2937 !important;
+        box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+    }
+    
+    .level-low {
+        background: linear-gradient(135deg, #f87171, #dc2626) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(248, 113, 113, 0.3);
+    }
+    
+    .level-icon {
+        font-size: 32px !important;
+        margin-right: 10px;
+    }
+    
+    /* Увеличенный шрифт для уровня */
+    .level-text {
+        font-size: 28px !important;
+        font-weight: bold !important;
     }
     
     /* Статус-бары */
@@ -222,6 +271,20 @@ st.markdown("""
             font-size: 16px;
         }
         
+        .level-container {
+            font-size: 20px !important;
+            padding: 6px 16px;
+            min-width: 150px;
+        }
+        
+        .level-text {
+            font-size: 20px !important;
+        }
+        
+        .level-icon {
+            font-size: 24px !important;
+        }
+        
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
         }
@@ -244,56 +307,22 @@ st.markdown("""
         .card-title {
             font-size: 14px;
         }
+        
+        .level-container {
+            font-size: 16px !important;
+            padding: 4px 12px;
+            min-width: 120px;
+        }
+        
+        .level-text {
+            font-size: 16px !important;
+        }
+        
+        .level-icon {
+            font-size: 20px !important;
+        }
     }
 </style>
-
-<script>
-    // Простое сохранение в localStorage
-    function saveStudent(name) {
-        try {
-            localStorage.setItem('ege_selected_student', name);
-            console.log('✅ Сохранён:', name);
-        } catch(e) {
-            console.log('❌ Ошибка:', e);
-        }
-    }
-    
-    // Простое чтение из localStorage
-    function getStudent() {
-        try {
-            return localStorage.getItem('ege_selected_student');
-        } catch(e) {
-            return null;
-        }
-    }
-    
-    // При загрузке страницы восстанавливаем выбор
-    document.addEventListener('DOMContentLoaded', function() {
-        const saved = getStudent();
-        if (saved) {
-            console.log('📥 Восстановлен:', saved);
-            // Отправляем в Streamlit через скрытое поле
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.id = 'restored_student';
-            input.value = saved;
-            document.body.appendChild(input);
-        }
-    });
-    
-    // Функция для сохранения при выборе
-    window.saveSelected = function(name) {
-        saveStudent(name);
-        // Добавляем параметр в URL без перезагрузки
-        const url = new URL(window.location);
-        url.searchParams.set('student', encodeURIComponent(name));
-        window.history.replaceState({}, '', url);
-        // Обновляем страницу через 100мс
-        setTimeout(() => {
-            window.location.reload();
-        }, 100);
-    };
-</script>
 """, unsafe_allow_html=True)
 
 # ID вашей таблицы
@@ -337,10 +366,14 @@ def convert_to_secondary(primary_score):
     return conversion_table.get(primary_rounded, primary_rounded)
 
 def get_score_level(score):
-    if score >= 80: return "Отлично", "🌟"
-    elif score >= 60: return "Хорошо", "👍"
-    elif score >= 40: return "Средне", "📊"
-    else: return "Требует внимания", "⚠️"
+    if score >= 80: 
+        return "Отлично", "🌟", "level-excellent"
+    elif score >= 60: 
+        return "Хорошо", "👍", "level-good"
+    elif score >= 40: 
+        return "Средне", "📊", "level-medium"
+    else: 
+        return "Требует внимания", "⚠️", "level-low"
 
 # Загрузка данных
 st.sidebar.title("🎓 Панель")
@@ -370,63 +403,111 @@ task_cols = [c for c in tasks_df.columns if c != task_id_col and c != 'date']
 # Получаем список учеников
 students_list = students_df[student_name_col].tolist()
 
-# ==================== ВОССТАНОВЛЕНИЕ ИЗ localStorage ====================
+# ==================== СИСТЕМА АУТЕНТИФИКАЦИИ ====================
 
 # Инициализация session_state
-if 'selected_student' not in st.session_state:
-    # Проверяем параметры URL (приходят из JavaScript)
-    query_params = st.query_params
-    saved_from_url = query_params.get('student', None)
-    
-    if saved_from_url and saved_from_url in students_list:
-        st.session_state.selected_student = saved_from_url
-        # Очищаем параметры после использования
-        st.query_params.clear()
-    else:
-        # Если ничего нет - берём первого
-        st.session_state.selected_student = students_list[0] if students_list else None
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.current_user = None
 
-# ==================== ВЫБОР УЧЕНИКА ====================
+# Функция для входа
+def login(student_name):
+    if student_name in students_list:
+        st.session_state.authenticated = True
+        st.session_state.current_user = student_name
+        return True
+    return False
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("👤 Ученик")
+# Функция для выхода
+def logout():
+    st.session_state.authenticated = False
+    st.session_state.current_user = None
+    st.rerun()
 
-# Определяем индекс для selectbox
-try:
-    current_index = students_list.index(st.session_state.selected_student)
-except ValueError:
-    current_index = 0
-    st.session_state.selected_student = students_list[0] if students_list else None
+# Проверяем сохранённый логин из cookies (через параметры URL)
+query_params = st.query_params
+saved_user = query_params.get('user', None)
+if saved_user and not st.session_state.authenticated:
+    try:
+        decoded = base64.b64decode(saved_user.encode()).decode()
+        if decoded in students_list:
+            login(decoded)
+            st.query_params.clear()
+            st.rerun()
+    except:
+        pass
 
-selected_student = st.sidebar.selectbox(
-    "Выберите ученика",
-    students_list,
-    index=current_index,
-    label_visibility="collapsed"
-)
+# ==================== СТРАНИЦА ВХОДА ====================
 
-# Если выбор изменился - сохраняем
-if selected_student != st.session_state.selected_student:
-    st.session_state.selected_student = selected_student
-    # Сохраняем в localStorage через JavaScript
-    st.markdown(f"""
-    <script>
-        try {{
-            localStorage.setItem('ege_selected_student', '{selected_student}');
-            console.log('✅ Сохранён ученик:', '{selected_student}');
-            // Добавляем параметр в URL и перезагружаем
-            const url = new URL(window.location);
-            url.searchParams.set('student', encodeURIComponent('{selected_student}'));
-            window.location.href = url.toString();
-        }} catch(e) {{
-            console.log('❌ Ошибка сохранения:', e);
-        }}
-    </script>
+if not st.session_state.authenticated:
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 20px;">
+        <h1 style="font-size: 48px; margin-bottom: 20px;">📊 Прогресс ЕГЭ</h1>
+        <p style="font-size: 20px; color: #6b7280; margin-bottom: 30px;">
+            Введите ФИО ученика для доступа к данным
+        </p>
+    </div>
     """, unsafe_allow_html=True)
+    
+    with st.form("login_form"):
+        st.markdown("### 🔑 Вход в систему")
+        
+        student_search = st.text_input(
+            "Введите ФИО ученика",
+            placeholder="Например: Иванов Иван Иванович",
+            help="Введите полное ФИО ученика, как в списке"
+        )
+        
+        remember_me = st.checkbox("Запомнить меня на этом устройстве", value=True)
+        
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            submitted = st.form_submit_button("🔓 Войти", use_container_width=True)
+        
+        if submitted and student_search:
+            if student_search in students_list:
+                login(student_search)
+                if remember_me:
+                    encoded = base64.b64encode(student_search.encode()).decode()
+                    st.query_params.user = encoded
+                st.rerun()
+            else:
+                similar = [s for s in students_list if student_search.lower() in s.lower()]
+                if similar:
+                    st.warning(f"❌ Ученик не найден. Возможно, вы имели в виду:\n" + "\n".join(f"- {s}" for s in similar[:3]))
+                else:
+                    st.error("❌ Ученик с таким ФИО не найден. Проверьте правильность ввода.")
+        elif submitted:
+            st.warning("⚠️ Введите ФИО ученика")
+    
+    st.markdown("""
+    <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-top: 20px;">
+        <p style="margin: 0; color: #6b7280;">
+            💡 <b>Подсказка:</b> Введите полное ФИО ученика (например: Иванов Иван Иванович). 
+            ФИО должно точно совпадать с указанным в списке.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.stop()
 
+# ==================== ОСНОВНАЯ СТРАНИЦА (ДЛЯ АВТОРИЗОВАННЫХ) ====================
+
+selected_student = st.session_state.current_user
+
+# Кнопка выхода в боковой панели
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"👤 **{selected_student}**")
+if st.sidebar.button("🚪 Выйти"):
+    if 'user' in st.query_params:
+        del st.query_params.user
+    logout()
+
+# Получаем данные ученика
 student_row = students_df[students_df[student_name_col] == selected_student]
 if student_row.empty:
-    st.error("Ученик не найден")
+    st.error("Ученик не найден. Возможно, данные были изменены.")
+    logout()
     st.stop()
 
 student_id = student_row[student_id_col].iloc[0]
@@ -508,19 +589,24 @@ total_tasks = len(probabilities)
 max_primary = sum(task_weights)
 progress_percent = (studied_count / total_tasks * 100) if total_tasks > 0 else 0
 
-# Уровень успеваемости
-level_text, level_icon = get_score_level(secondary_score)
+# Уровень успеваемости с цветом
+level_text, level_icon, level_class = get_score_level(secondary_score)
 
 # ==================== ОСНОВНАЯ СТРАНИЦА ====================
 
-# Заголовок
+# Заголовок с цветным уровнем
 st.markdown(f"""
-<div>
-    <h1 style="margin: 0; color: #1f2937;">{selected_student}</h1>
-    <p style="color: #6b7280; margin: 0;">{level_icon} Уровень: {level_text}</p>
-    <p style="color: #9ca3af; font-size: 14px; margin: 4px 0 0 0;">
-        📅 {all_dates[-1] if all_dates else 'Нет данных'}
-    </p>
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+    <div>
+        <h1 style="margin: 0; color: #1f2937;">📊 {selected_student}</h1>
+        <p style="color: #9ca3af; font-size: 14px; margin: 4px 0 0 0;">
+            📅 {all_dates[-1] if all_dates else 'Нет данных'}
+        </p>
+    </div>
+    <div class="level-container {level_class}">
+        <span class="level-icon">{level_icon}</span>
+        <span class="level-text">{level_text}</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -632,7 +718,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.markdown('<h3 style="margin-bottom: 12px; color: #1f2937;">🗺 Карта знаний</h3>', unsafe_allow_html=True)
     
-    # Создаём цветную карту заданий
     colors = []
     labels = []
     for prob, status in zip(probabilities, task_statuses):
@@ -694,9 +779,8 @@ with tab1:
         'scrollZoom': False
     }
     
-    st.plotly_chart(fig, use_container_width=True, config=config)
+    st.plotly_chart(fig, width='stretch', config=config)
     
-    # Легенда
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.markdown("🟩 **80-100%** — отлично")
@@ -711,7 +795,6 @@ with tab1:
     
     st.markdown("---")
     
-    # Детальная таблица
     st.markdown('<h3 style="color: #1f2937;">📋 Детальная информация</h3>', unsafe_allow_html=True)
     
     details_data = []
@@ -725,14 +808,13 @@ with tab1:
         })
     
     df_details = pd.DataFrame(details_data)
-    st.dataframe(df_details, use_container_width=True, hide_index=True)
+    st.dataframe(df_details, width='stretch', hide_index=True)
 
 # ==================== TAB 2: ПРОГРЕСС ====================
 with tab2:
     st.markdown('<h3 style="color: #1f2937;">📈 Динамика обучения</h3>', unsafe_allow_html=True)
     
     if len(student_tasks) > 1:
-        # График прогресса во времени
         dates = []
         scores = []
         primaries = []
@@ -809,9 +891,8 @@ with tab2:
                 'scrollZoom': False
             }
             
-            st.plotly_chart(fig_progress, use_container_width=True, config=config)
+            st.plotly_chart(fig_progress, width='stretch', config=config)
             
-            # Дополнительная статистика
             col1, col2, col3 = st.columns(3)
             
             with col1:
@@ -854,103 +935,283 @@ with tab2:
 with tab3:
     st.markdown('<h3 style="color: #1f2937;">🎯 Персональные рекомендации</h3>', unsafe_allow_html=True)
     
-    # 1. Слабые задания
+    # Определяем слабые, средние и сильные задания
     weak_tasks = [
         (num, prob) for num, prob, status in zip(task_numbers, probabilities, task_statuses)
-        if status == 'studied' and prob < 60
+        if status == 'studied' and prob < 40
     ]
     
-    # 2. Неизученные задания
+    medium_tasks = [
+        (num, prob) for num, prob, status in zip(task_numbers, probabilities, task_statuses)
+        if status == 'studied' and 40 <= prob < 70
+    ]
+    
+    strong_tasks = [
+        (num, prob) for num, prob, status in zip(task_numbers, probabilities, task_statuses)
+        if status == 'studied' and prob >= 70
+    ]
+    
     not_studied = [
         num for num, status in zip(task_numbers, task_statuses)
         if status == 'not_studied'
     ]
     
-    # 3. Задания для улучшения (близкие к следующему уровню)
-    improving_tasks = [
-        (num, prob) for num, prob, status in zip(task_numbers, probabilities, task_statuses)
-        if status == 'studied' and 60 <= prob < 80
-    ]
+    # ==================== МОТИВИРУЮЩИЕ СООБЩЕНИЯ ====================
     
-    col_rec1, col_rec2 = st.columns(2)
+    import random
+    from datetime import datetime
     
-    with col_rec1:
-        if weak_tasks:
-            st.markdown("""
-            <div class="rec-warning">
-                <h4 style="color: #dc2626; margin: 0 0 8px 0;">🔴 Требуют внимания</h4>
-            """, unsafe_allow_html=True)
-            
-            weak_sorted = sorted(weak_tasks, key=lambda x: x[1])[:5]
-            for num, prob in weak_sorted:
-                st.markdown(f"""
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
-                    <span style="font-weight: 600; color: #1f2937;">Задание {num}</span>
-                    <span style="color: #dc2626;">{prob:.0f}%</span>
-                </div>
-                <div class="status-bar">
-                    <div class="status-bar-fill" style="width: {prob}%; background: #ef4444;"></div>
-                </div>
-                """, unsafe_allow_html=True)
-                st.markdown(f"<p class='rec-text'>Рекомендуется повторить тему и решить дополнительные задачи</p>", unsafe_allow_html=True)
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-        else:
-            st.success("✅ Все изученные задания освоены на достаточном уровне!")
+    # Банк мотивирующих сообщений для разных ситуаций
+    motivation_messages = {
+        'weak': [
+            "💪 «Ты уже сделал первый шаг — начал решать! Осталось совсем немного, чтобы закрепить успех. Задание {num} — отличная возможность показать, на что ты способен. Давай, ты справишься!»",
+            "🚀 «Знаешь, что общего у всех великих? Они не боялись ошибаться на пути к успеху! Задание {num} — твой следующий рубеж. Ты уже близко к прорыву!»",
+            "🌟 «Каждое задание — это кирпичик в твоём фундаменте знаний. Задание {num} ждёт тебя, чтобы стать ещё одним прочным кирпичом. Ты можешь больше, чем думаешь!»",
+            "🔥 «Твой прогресс виден невооружённым глазом! Задание {num} — идеальный кандидат для улучшения. Представь, как возрастёт твой балл, когда ты его освоишь!»",
+            "🎯 «Помни: чем сложнее задание, тем слаще победа! Задание {num} — твой персональный вызов. Прими его и докажи себе, что ты способен на большее!»",
+            "⚡ «Знаешь, как прокачивают мышцы? Через преодоление! Задание {num} — это твой тренажёр для мозга. Поработай над ним — и результат не заставит себя ждать!»",
+            "🏆 «Победители не те, кто никогда не падает, а те, кто всегда поднимается. Задание {num} — твой шанс подняться ещё выше! Ты уже на правильном пути.»",
+            "💫 «Каждое новое задание — это шаг к мечте. Задание {num} приближает тебя к цели быстрее, чем ты думаешь. Не останавливайся на достигнутом!»",
+            "🌈 «Ты уже столько всего освоил! Задание {num} — это просто следующий уровень. Ты точно сможешь его пройти, ведь у тебя всё получается!»",
+            "🎖️ «Настоящий герой не боится трудностей. Задание {num} — твой шанс проявить характер и показать, на что ты способен. Вперёд, к победе!»"
+        ],
+        'medium': [
+            "🎉 «Ты уже хорошо справляешься! Задание {num} — отличная возможность закрепить успех и перейти на новый уровень. Ты на правильном пути!»",
+            "📈 «Прогресс очевиден! Задание {num} — это та вершина, которую осталось чуть-чуть покорить. Ещё немного — и ты будешь на высоте!»",
+            "⭐ «Ты уже почти там! Задание {num} требует всего лишь небольшого усилия, чтобы стать твоим сильным местом. Давай, финишная прямая!»",
+            "🌱 «Твой рост вдохновляет! Задание {num} — это следующая ступенька на пути к совершенству. Ты уже заложил отличную основу, теперь осталось доделать!»",
+            "✨ «У тебя есть все шансы сделать это задание идеальным! {num} — твой шанс блеснуть. Ты уже знаешь почти всё, осталось лишь отточить мастерство!»"
+        ],
+        'strong': [
+            "🏅 «Ты настоящий мастер! Задание {num} ты освоил на отлично. Почему бы не помочь другим или не усложнить себе задачу? Ты готов к новым свершениям!»",
+            "🌟 «Твой результат по заданию {num} впечатляет! Ты доказал, что способен на многое. Продолжай в том же духе — ты на верном пути к сотне!»",
+            "🎯 «Ты уже профи в задании {num}! Так держать! Твои успехи вдохновляют окружающих. Осталось совсем немного до абсолютного совершенства!»"
+        ],
+        'all_done': [
+            "🎊 «Поздравляю! Ты прошёл все задания! Ты — настоящий герой своего обучения. Твой упорство и труд принесли плоды. Гордись собой!»",
+            "🏆 «Удивительно! Ты освоил все задания. Ты — пример для подражания! Твоя целеустремлённость заслуживает самых высоких похвал!»",
+            "🚀 «Ты сделал это! Все задания позади. Теперь ты готов к любым вызовам. Помни: с таким подходом ты покоришь любые вершины!»"
+        ],
+        'no_weak': [
+            "💪 «Отлично! У тебя нет слабых мест — все задания на хорошем уровне. Теперь твоя задача — превратить хорошие результаты в идеальные. Ты сможешь!»",
+            "🌟 «Твой результат впечатляет! Все задания освоены на достойном уровне. Теперь пора поднимать планку ещё выше. Ты готов к новому уровню!»",
+            "🎯 «Ты уже достиг отличных результатов по всем заданиям! Это говорит о твоей целеустремлённости. Продолжай в том же духе — и сотня будет твоей!»"
+        ],
+        'weak_improvement': [
+            "📈 «Отличный прогресс! Ты уже начал улучшать свои результаты. Помни: даже маленький шаг вперёд — это уже победа. Продолжай двигаться!»",
+            "🔥 «Ты на правильном пути! С каждым разом ты становишься лучше. Не сбавляй обороты — у тебя всё получится!»"
+        ]
+    }
     
-    with col_rec2:
-        if not_studied:
-            st.markdown("""
-            <div class="rec-info">
-                <h4 style="color: #2563eb; margin: 0 0 8px 0;">📚 Неизученные задания</h4>
-            """, unsafe_allow_html=True)
-            
-            for num in not_studied[:5]:
-                st.markdown(f"""
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
-                    <span style="font-weight: 600; color: #1f2937;">Задание {num}</span>
-                    <span style="color: #9ca3af;">⏳ Не начато</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            if len(not_studied) > 5:
-                st.markdown(f"<p style='color: #9ca3af;'>... и ещё {len(not_studied) - 5} заданий</p>", unsafe_allow_html=True)
-            
-            st.markdown("""
-            <p class='rec-text'>💡 Рекомендуется начать с простых заданий и постепенно переходить к сложным</p>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-        else:
-            st.success("🎉 Все задания изучены!")
+    # Функция для получения мотивирующего сообщения с уникальностью
+    def get_motivation_message(task_num, category, used_messages, prob=None):
+        messages = motivation_messages.get(category, motivation_messages['weak'])
+        
+        # Фильтруем уже использованные сообщения
+        available = [m for m in messages if m not in used_messages]
+        
+        if not available:
+            # Если все сообщения использованы, берём из резерва
+            available = messages.copy()
+            used_messages.clear()
+        
+        # Выбираем случайное сообщение
+        msg_template = random.choice(available)
+        used_messages.add(msg_template)
+        
+        # Форматируем с номером задания
+        return msg_template.format(num=task_num), used_messages
     
-    # Задания для улучшения
-    if improving_tasks:
+    # Отображаем рекомендации
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #e0f2fe, #dbeafe); padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid #bae6fd;">
+        <p style="font-size: 22px; font-weight: 600; margin: 0; color: #1f2937; text-align: center;">
+            💡 «Успех — это не финальная точка, это путь, который ты проходишь каждый день. 
+            Каждое решённое задание — шаг к твоей мечте!»
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Используем session_state для хранения использованных сообщений
+    if 'used_messages' not in st.session_state:
+        st.session_state.used_messages = set()
+    
+    # === 1. Слабые задания ===
+    if weak_tasks:
+        weak_sorted = sorted(weak_tasks, key=lambda x: x[1])[:3]
+        
         st.markdown("""
-        <div class="rec-improve">
-            <h4 style="color: #d97706; margin: 0 0 8px 0;">⭐ Задания для улучшения</h4>
+        <div style="background: #fef2f2; border-radius: 16px; padding: 20px; border: 1px solid #fecaca; margin-bottom: 16px;">
+            <h4 style="color: #dc2626; margin: 0 0 12px 0; font-size: 22px;">🔴 Зона роста</h4>
+            <p style="color: #6b7280; margin-bottom: 12px; font-size: 16px;">
+                Эти задания требуют твоего внимания. Но помни: именно преодоление трудностей делает нас сильнее!
+            </p>
         """, unsafe_allow_html=True)
         
-        improving_sorted = sorted(improving_tasks, key=lambda x: x[1], reverse=True)[:5]
-        for num, prob in improving_sorted:
+        for num, prob in weak_sorted:
+            msg, st.session_state.used_messages = get_motivation_message(
+                num, 'weak', st.session_state.used_messages, prob
+            )
+            
             st.markdown(f"""
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
-                <span style="font-weight: 600; color: #1f2937;">Задание {num}</span>
-                <span style="color: #d97706;">{prob:.0f}%</span>
-            </div>
-            <div class="status-bar">
-                <div class="status-bar-fill" style="width: {prob}%; background: #f59e0b;"></div>
+            <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #ef4444; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                    <span style="background: #ef4444; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">{num}</span>
+                    <span style="font-weight: 600; color: #dc2626; font-size: 18px;">{prob:.0f}%</span>
+                    <span style="color: #9ca3af; font-size: 14px;">выполнено</span>
+                </div>
+                <div class="status-bar" style="margin: 8px 0 12px 0;">
+                    <div class="status-bar-fill" style="width: {prob}%; background: linear-gradient(90deg, #ef4444, #f87171);"></div>
+                </div>
+                <p style="font-size: 16px; line-height: 1.6; color: #1f2937; margin: 0; font-style: italic;">
+                    {msg}
+                </p>
+                <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span style="background: #f3f4f6; color: #6b7280; font-size: 13px; padding: 3px 10px; border-radius: 12px;">📚 Повтори тему</span>
+                    <span style="background: #f3f4f6; color: #6b7280; font-size: 13px; padding: 3px 10px; border-radius: 12px;">✍️ Реши 5 задач</span>
+                    <span style="background: #f3f4f6; color: #6b7280; font-size: 13px; padding: 3px 10px; border-radius: 12px;">🎯 Цель: 80%</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
-            st.markdown(f"<p class='rec-text'>Цель: достичь 80% для отличного результата</p>", unsafe_allow_html=True)
         
         st.markdown("</div>", unsafe_allow_html=True)
+    
+    # === 2. Средние задания ===
+    if medium_tasks:
+        medium_sorted = sorted(medium_tasks, key=lambda x: x[1], reverse=True)[:2]
+        
+        st.markdown("""
+        <div style="background: #fef3c7; border-radius: 16px; padding: 20px; border: 1px solid #fde68a; margin-bottom: 16px;">
+            <h4 style="color: #d97706; margin: 0 0 12px 0; font-size: 22px;">⭐ Потенциал к росту</h4>
+            <p style="color: #6b7280; margin-bottom: 12px; font-size: 16px;">
+                Ты уже хорошо справляешься! Эти задания — отличная возможность для рывка вперёд.
+            </p>
+        """, unsafe_allow_html=True)
+        
+        for num, prob in medium_sorted:
+            msg, st.session_state.used_messages = get_motivation_message(
+                num, 'medium', st.session_state.used_messages, prob
+            )
+            
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #f59e0b; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                    <span style="background: #f59e0b; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">{num}</span>
+                    <span style="font-weight: 600; color: #d97706; font-size: 18px;">{prob:.0f}%</span>
+                    <span style="color: #9ca3af; font-size: 14px;">выполнено</span>
+                </div>
+                <div class="status-bar" style="margin: 8px 0 12px 0;">
+                    <div class="status-bar-fill" style="width: {prob}%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
+                </div>
+                <p style="font-size: 16px; line-height: 1.6; color: #1f2937; margin: 0; font-style: italic;">
+                    {msg}
+                </p>
+                <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span style="background: #f3f4f6; color: #6b7280; font-size: 13px; padding: 3px 10px; border-radius: 12px;">📈 Закрепи материал</span>
+                    <span style="background: #f3f4f6; color: #6b7280; font-size: 13px; padding: 3px 10px; border-radius: 12px;">✍️ Реши 3 задачи</span>
+                    <span style="background: #f3f4f6; color: #6b7280; font-size: 13px; padding: 3px 10px; border-radius: 12px;">🎯 Цель: 90%</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # === 3. Неизученные задания ===
+    if not_studied:
+        st.markdown("""
+        <div style="background: #eff6ff; border-radius: 16px; padding: 20px; border: 1px solid #bfdbfe; margin-bottom: 16px;">
+            <h4 style="color: #2563eb; margin: 0 0 12px 0; font-size: 22px;">📚 Неизученные задания</h4>
+            <p style="color: #6b7280; margin-bottom: 12px; font-size: 16px;">
+                Эти задания ждут тебя! Начни с самых простых и постепенно двигайся к сложным.
+            </p>
+        """, unsafe_allow_html=True)
+        
+        # Берём первые 5 неизученных
+        not_studied_list = not_studied[:5]
+        for num in not_studied_list:
+            # Специальные сообщения для неизученных
+            msg, st.session_state.used_messages = get_motivation_message(
+                num, 'medium', st.session_state.used_messages
+            )
+            
+            st.markdown(f"""
+            <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                    <span style="background: #3b82f6; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">{num}</span>
+                    <span style="font-weight: 600; color: #2563eb; font-size: 18px;">🚀 Новое</span>
+                    <span style="color: #9ca3af; font-size: 14px;">ждёт тебя</span>
+                </div>
+                <p style="font-size: 16px; line-height: 1.6; color: #1f2937; margin: 0; font-style: italic;">
+                    «Каждое новое задание — это возможность открыть что-то удивительное! Задание {num} станет твоим следующим достижением. Ты готов? Вперёд!»
+                </p>
+                <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span style="background: #f3f4f6; color: #6b7280; font-size: 13px; padding: 3px 10px; border-radius: 12px;">📖 Изучи теорию</span>
+                    <span style="background: #f3f4f6; color: #6b7280; font-size: 13px; padding: 3px 10px; border-radius: 12px;">✍️ Попробуй решить</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if len(not_studied) > 5:
+            st.markdown(f"""
+            <div style="text-align: center; color: #6b7280; padding: 8px;">
+                <span style="font-size: 14px;">... и ещё {len(not_studied) - 5} заданий ждут тебя! 🚀</span>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # === 4. Мотивирующий итог ===
+    st.markdown("---")
+    
+    # Считаем прогресс
+    total_studied = studied_count
+    total_all = total_tasks
+    
+    # Определяем этап обучения
+    if total_studied == total_all:
+        stage_message = random.choice([
+            "🎊 Ты покорил все вершины! Это невероятное достижение! Ты — пример для подражания. Помни: ты способен на всё, к чему приложишь усилия!",
+            "🏆 Браво! Ты прошёл все задания. Твой путь был долгим, но ты справился! Теперь ты готов к самым сложным вызовам. Гордись собой!",
+            "🚀 Удивительный результат! Все задания освоены. Ты показал характер и упорство. Теперь ты знаешь: ты способен на большее, чем думал!"
+        ])
+    elif total_studied / total_all >= 0.8:
+        stage_message = random.choice([
+            "💪 Ты почти у цели! Осталось совсем немного. Твой прогресс впечатляет! Продолжай в том же духе — ты на финишной прямой!",
+            "🌟 Ты уже освоил бóльшую часть заданий! Это отличный результат. Ещё чуть-чуть — и ты будешь непобедим!",
+            "🎯 Ты на финишной прямой! Остались последние шаги к совершенству. Твой упорство достойно уважения!"
+        ])
+    elif total_studied / total_all >= 0.5:
+        stage_message = random.choice([
+            "📈 Ты уже на полпути! Отличный темп. Продолжай двигаться вперёд, и ты обязательно достигнешь цели!",
+            "🌱 Твой прогресс очевиден! Ты освоил половину заданий. Это важный этап на пути к успеху. Так держать!",
+            "🔥 Ты в самом разгаре пути! Уже много сделано, но ещё больше ждёт впереди. Помни: дорогу осилит идущий!"
+        ])
+    else:
+        stage_message = random.choice([
+            "🚀 Путь начинается с первого шага! Ты уже сделал этот шаг. Каждое новое задание приближает тебя к цели. Не останавливайся!",
+            "💫 Начало положено! Ты только начинаешь свой путь, но это самое важное. Помни: даже великие начинали с малого!",
+            "🌟 Ты уже в деле! Каждое решённое задание — это твоя победа. Продолжай двигаться вперёд, и ты увидишь, на что способен!"
+        ])
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #dbeafe, #e0e7ff); border-radius: 16px; padding: 24px; border: 1px solid #bae6fd; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 8px;">🎯</div>
+            <h4 style="color: #1f2937; margin: 0 0 8px 0; font-size: 20px;">Твой прогресс: {total_studied}/{total_all} заданий</h4>
+            <div class="status-bar" style="max-width: 300px; margin: 8px auto;">
+                <div class="status-bar-fill" style="width: {(total_studied/total_all*100) if total_all > 0 else 0}%; background: linear-gradient(90deg, #3b82f6, #8b5cf6);"></div>
+            </div>
+            <p style="font-size: 18px; line-height: 1.6; color: #1f2937; margin: 12px 0 0 0; font-style: italic;">
+                {stage_message}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ==================== TAB 4: СРАВНЕНИЕ ====================
 with tab4:
     st.markdown('<h3 style="color: #1f2937;">🏅 Сравнение с классом</h3>', unsafe_allow_html=True)
     
-    # Подготовка данных для сравнения
     all_scores = []
     for _, row in students_df.iterrows():
         sid = row[student_id_col]
@@ -983,7 +1244,6 @@ with tab4:
         all_scores.sort(key=lambda x: x[1], reverse=True)
         df_ranking = pd.DataFrame(all_scores, columns=['Ученик', 'Балл'])
         
-        # Определяем цвет для текущего ученика
         colors_scores = ['#3b82f6' if name == selected_student else '#9ca3af' for name, _ in all_scores]
         
         fig_rank = go.Figure()
@@ -1023,9 +1283,8 @@ with tab4:
             'scrollZoom': False
         }
         
-        st.plotly_chart(fig_rank, use_container_width=True, config=config)
+        st.plotly_chart(fig_rank, width='stretch', config=config)
         
-        # Статистика
         col1, col2, col3, col4 = st.columns(4)
         
         current_score = next((s for n, s in all_scores if n == selected_student), 0)
@@ -1062,7 +1321,6 @@ with tab4:
             </div>
             """, unsafe_allow_html=True)
         
-        # Позиция в рейтинге
         rank = next((i+1 for i, (n, _) in enumerate(all_scores) if n == selected_student), None)
         total = len(all_scores)
         percentile = ((total - rank) / total * 100) if rank else 0
