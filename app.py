@@ -8,6 +8,7 @@ import numpy as np
 from datetime import datetime
 import hashlib
 import base64
+import random
 
 st.set_page_config(page_title="Прогресс ЕГЭ", layout="wide")
 
@@ -779,7 +780,7 @@ with tab1:
         'scrollZoom': False
     }
     
-    st.plotly_chart(fig, width='stretch', config=config)
+    st.plotly_chart(fig, use_container_width=True, config=config)
     
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
@@ -808,7 +809,7 @@ with tab1:
         })
     
     df_details = pd.DataFrame(details_data)
-    st.dataframe(df_details, width='stretch', hide_index=True)
+    st.dataframe(df_details, use_container_width=True, hide_index=True)
 
 # ==================== TAB 2: ПРОГРЕСС ====================
 with tab2:
@@ -891,7 +892,7 @@ with tab2:
                 'scrollZoom': False
             }
             
-            st.plotly_chart(fig_progress, width='stretch', config=config)
+            st.plotly_chart(fig_progress, use_container_width=True, config=config)
             
             col1, col2, col3 = st.columns(3)
             
@@ -958,9 +959,6 @@ with tab3:
     
     # ==================== МОТИВИРУЮЩИЕ СООБЩЕНИЯ ====================
     
-    import random
-    from datetime import datetime
-    
     # Банк мотивирующих сообщений для разных ситуаций
     motivation_messages = {
         'weak': [
@@ -996,10 +994,6 @@ with tab3:
             "💪 «Отлично! У тебя нет слабых мест — все задания на хорошем уровне. Теперь твоя задача — превратить хорошие результаты в идеальные. Ты сможешь!»",
             "🌟 «Твой результат впечатляет! Все задания освоены на достойном уровне. Теперь пора поднимать планку ещё выше. Ты готов к новому уровню!»",
             "🎯 «Ты уже достиг отличных результатов по всем заданиям! Это говорит о твоей целеустремлённости. Продолжай в том же духе — и сотня будет твоей!»"
-        ],
-        'weak_improvement': [
-            "📈 «Отличный прогресс! Ты уже начал улучшать свои результаты. Помни: даже маленький шаг вперёд — это уже победа. Продолжай двигаться!»",
-            "🔥 «Ты на правильном пути! С каждым разом ты становишься лучше. Не сбавляй обороты — у тебя всё получится!»"
         ]
     }
     
@@ -1007,19 +1001,15 @@ with tab3:
     def get_motivation_message(task_num, category, used_messages, prob=None):
         messages = motivation_messages.get(category, motivation_messages['weak'])
         
-        # Фильтруем уже использованные сообщения
         available = [m for m in messages if m not in used_messages]
         
         if not available:
-            # Если все сообщения использованы, берём из резерва
             available = messages.copy()
             used_messages.clear()
         
-        # Выбираем случайное сообщение
         msg_template = random.choice(available)
         used_messages.add(msg_template)
         
-        # Форматируем с номером задания
         return msg_template.format(num=task_num), used_messages
     
     # Отображаем рекомендации
@@ -1126,10 +1116,8 @@ with tab3:
             </p>
         """, unsafe_allow_html=True)
         
-        # Берём первые 5 неизученных
         not_studied_list = not_studied[:5]
         for num in not_studied_list:
-            # Специальные сообщения для неизученных
             msg, st.session_state.used_messages = get_motivation_message(
                 num, 'medium', st.session_state.used_messages
             )
@@ -1163,11 +1151,9 @@ with tab3:
     # === 4. Мотивирующий итог ===
     st.markdown("---")
     
-    # Считаем прогресс
     total_studied = studied_count
     total_all = total_tasks
     
-    # Определяем этап обучения
     if total_studied == total_all:
         stage_message = random.choice([
             "🎊 Ты покорил все вершины! Это невероятное достижение! Ты — пример для подражания. Помни: ты способен на всё, к чему приложишь усилия!",
@@ -1283,7 +1269,7 @@ with tab4:
             'scrollZoom': False
         }
         
-        st.plotly_chart(fig_rank, width='stretch', config=config)
+        st.plotly_chart(fig_rank, use_container_width=True, config=config)
         
         col1, col2, col3, col4 = st.columns(4)
         
