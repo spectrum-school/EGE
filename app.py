@@ -534,7 +534,7 @@ if page == "🏫 Обзор класса":
             'scrollZoom': False
         }
         
-        st.plotly_chart(fig_rank, width='stretch', config=config)
+        st.plotly_chart(fig_rank, use_container_width=True, config=config)
     
     with col_right:
         st.markdown('<h3 style="color: #1f2937;">📝 Домашние задания</h3>', unsafe_allow_html=True)
@@ -592,7 +592,7 @@ if page == "🏫 Обзор класса":
         })
     
     df_table = pd.DataFrame(table_data)
-    st.dataframe(df_table, width='stretch', hide_index=True)
+    st.dataframe(df_table, use_container_width=True, hide_index=True)
 
 # ==================== СТРАНИЦА: УЧЕНИК ====================
 else:
@@ -951,7 +951,7 @@ else:
             'scrollZoom': False
         }
 
-        st.plotly_chart(fig, width='stretch', config=config)
+        st.plotly_chart(fig, use_container_width=True, config=config)
 
         col1, col2 = st.columns(2)
 
@@ -1028,7 +1028,7 @@ else:
             })
 
         df_details = pd.DataFrame(details_data)
-        st.dataframe(df_details, width='stretch', hide_index=True)
+        st.dataframe(df_details, use_container_width=True, hide_index=True)
 
     # ==================== TAB 2: ДИНАМИКА ====================
     with tab2:
@@ -1088,7 +1088,7 @@ else:
                     modebar=dict(remove=['zoomIn2d', 'zoomOut2d', 'pan2d', 'resetScale2d', 'autoScale2d'])
                 )
 
-                st.plotly_chart(fig_progress, width='stretch', config=config)
+                st.plotly_chart(fig_progress, use_container_width=True, config=config)
 
                 col1, col2, col3 = st.columns(3)
 
@@ -1318,7 +1318,7 @@ else:
                 modebar=dict(remove=['zoomIn2d', 'zoomOut2d', 'pan2d', 'resetScale2d', 'autoScale2d'])
             )
 
-            st.plotly_chart(fig_rank, width='stretch', config=config)
+            st.plotly_chart(fig_rank, use_container_width=True, config=config)
 
             col1, col2, col3, col4 = st.columns(4)
 
@@ -1356,11 +1356,9 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
 
-            # ==================== ИСПРАВЛЕННЫЙ РАСЧЁТ ПРОЦЕНТИЛЯ ====================
             rank = next((i+1 for i, (n, _) in enumerate(all_scores) if n == selected_student), None)
             total = len(all_scores)
             
-            # Исключаем самого ученика из расчёта
             students_below = total - rank if rank else 0
             other_students = total - 1
             percentile = (students_below / other_students * 100) if other_students > 0 else 100
