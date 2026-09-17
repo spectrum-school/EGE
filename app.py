@@ -142,50 +142,6 @@ st.markdown("""
     
     .stAlert { background-color: #ffffff !important; border-color: #e5e7eb !important; color: #1f2937 !important; }
     
-    /* Стиль для рейтинга ученика в списке */
-    .rank-row {
-        display: flex;
-        align-items: center;
-        padding: 12px 16px;
-        border-radius: 12px;
-        margin-bottom: 8px;
-        background: white;
-        border: 1px solid #e5e7eb;
-        transition: all 0.2s;
-    }
-    
-    .rank-row:hover {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transform: translateY(-1px);
-    }
-    
-    .rank-medal {
-        font-size: 24px;
-        margin-right: 12px;
-        min-width: 40px;
-        text-align: center;
-    }
-    
-    .rank-name {
-        flex-grow: 1;
-        font-weight: 600;
-        font-size: 16px;
-        color: #1f2937;
-    }
-    
-    .rank-score {
-        font-weight: 700;
-        font-size: 20px;
-        color: #3b82f6;
-        min-width: 60px;
-        text-align: right;
-    }
-    
-    .rank-level {
-        margin-left: 12px;
-        font-size: 20px;
-    }
-    
     @media only screen and (max-width: 768px) {
         .card { padding: 16px; margin-bottom: 12px; }
         .card-value { font-size: 28px; }
@@ -195,8 +151,6 @@ st.markdown("""
         .level-icon { font-size: 24px !important; }
         .hw-container { flex-direction: column; align-items: stretch !important; text-align: center; padding: 14px; }
         .stTabs [data-baseweb="tab"] { font-size: 14px; padding: 8px 12px; }
-        .rank-score { font-size: 16px; }
-        .rank-name { font-size: 14px; }
     }
     
     @media only screen and (max-width: 480px) {
@@ -357,17 +311,14 @@ for _, row in students_df.iterrows():
     if not s_tasks.empty:
         forecast = calculate_student_forecast(s_tasks, task_cols)
         
-        # Домашнее задание
         hw_link = row[hw_link_col] if hw_link_col else None
         hw_status = row[hw_status_col] if hw_status_col else None
         hw_done = False
         if hw_status and isinstance(hw_status, str) and hw_status.strip().lower() in ['да', 'yes', '+', 'true', '1']:
             hw_done = True
         
-        # Последняя попытка
         last_date = s_tasks.iloc[-1]['date'] if not s_tasks.empty else None
         
-        # Прогресс изучения
         latest = s_tasks.iloc[-1]
         task_columns = [c for c in latest.index if c.startswith('task_')]
         studied = 0
@@ -427,13 +378,11 @@ if page == "🏫 Обзор класса":
     
     st.markdown("---")
     
-    # ==================== ОБЩИЕ МЕТРИКИ КЛАССА ====================
     class_avg = class_df['forecast_secondary'].mean()
     class_max = class_df['forecast_secondary'].max()
     class_min = class_df['forecast_secondary'].min()
     class_avg_progress = class_df['progress'].mean()
     
-    # Самый высокий и низкий прогноз
     top_student = class_df_sorted.iloc[0]
     bottom_student = class_df_sorted.iloc[-1]
     
@@ -491,7 +440,6 @@ if page == "🏫 Обзор класса":
     
     st.markdown("---")
     
-    # ==================== РАСПРЕДЕЛЕНИЕ ПО УРОВНЯМ ====================
     st.markdown('<h3 style="color: #1f2937;">📊 Распределение по уровням подготовки</h3>', unsafe_allow_html=True)
     
     excellent = len(class_df[class_df['forecast_secondary'] >= 80])
@@ -539,7 +487,6 @@ if page == "🏫 Обзор класса":
     
     st.markdown("---")
     
-    # ==================== ГРАФИК РЕЙТИНГА КЛАССА ====================
     col_left, col_right = st.columns([3, 2])
     
     with col_left:
@@ -607,7 +554,6 @@ if page == "🏫 Обзор класса":
         </div>
         """, unsafe_allow_html=True)
         
-        # Список не выполнивших
         not_done = class_df[~class_df['hw_done']]['name'].tolist()
         
         if not_done:
@@ -628,7 +574,6 @@ if page == "🏫 Обзор класса":
     
     st.markdown("---")
     
-    # ==================== СВОДНАЯ ТАБЛИЦА ====================
     st.markdown('<h3 style="color: #1f2937;">📋 Сводная таблица по классу</h3>', unsafe_allow_html=True)
     
     table_data = []
@@ -1411,8 +1356,10 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
 
+            # ==================== ИСПРАВЛЕННЫЙ РАСЧЁТ ПРОЦЕНТИЛЯ ====================
             rank = next((i+1 for i, (n, _) in enumerate(all_scores) if n == selected_student), None)
             total = len(all_scores)
+            
             # Исключаем самого ученика из расчёта
             students_below = total - rank if rank else 0
             other_students = total - 1
