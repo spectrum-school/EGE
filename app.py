@@ -355,19 +355,51 @@ class_df_sorted = class_df.sort_values('forecast_secondary', ascending=False).re
 st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Отображение")
 
+# Инициализация session_state для страницы и ученика
+if 'page' not in st.session_state:
+    st.session_state.page = "🏫 Обзор класса"
+if 'selected_student_from_class' not in st.session_state:
+    st.session_state.selected_student_from_class = None
+
+# Определяем список страниц
+pages_list = ["🏫 Обзор класса", "👤 Ученик"]
+
+# Определяем индекс текущей страницы
+try:
+    page_index = pages_list.index(st.session_state.page)
+except ValueError:
+    page_index = 0
+
 page = st.sidebar.radio(
     "Выберите страницу:",
-    ["🏫 Обзор класса", "👤 Ученик"],
+    pages_list,
+    index=page_index,
     label_visibility="collapsed"
 )
+
+# Синхронизируем session_state
+st.session_state.page = page
 
 selected_student = None
 if page == "👤 Ученик":
     st.sidebar.markdown("---")
     st.sidebar.subheader("👤 Выберите ученика")
+    
+    # Определяем индекс для selectbox
+    student_options = class_df_sorted['name'].tolist()
+    
+    # Если был клик по имени из рейтинга - используем его
+    if st.session_state.selected_student_from_class and st.session_state.selected_student_from_class in student_options:
+        default_index = student_options.index(st.session_state.selected_student_from_class)
+        # Сбрасываем после использования
+        st.session_state.selected_student_from_class = None
+    else:
+        default_index = 0
+    
     selected_student = st.sidebar.selectbox(
         "Ученик",
-        class_df_sorted['name'].tolist(),
+        student_options,
+        index=default_index,
         label_visibility="collapsed"
     )
 
@@ -487,10 +519,67 @@ if page == "🏫 Обзор класса":
     
     st.markdown("---")
     
+    # ==================== РЕЙТИНГ КЛАССА С КЛИКАБЕЛЬНЫМИ ИМЕНАМИ ====================
     col_left, col_right = st.columns([3, 2])
     
     with col_left:
         st.markdown('<h3 style="color: #1f2937;">🏆 Рейтинг класса</h3>', unsafe_allow_html=True)
+        st.markdown('<p style="color: #9ca3af; font-size: 13px; margin-bottom: 12px;">👆 Нажмите на имя ученика, чтобы открыть его статистику</p>', unsafe_allow_html=True)
+        
+        # Кнопки перехода к ученику
+        for idx, row in class_df_sorted.iterrows():
+            student_name = row['name']
+            score = row['forecast_secondary']
+            level_text, level_icon, _ = get_score_level(score)
+            
+            # Медаль для топ-3
+            if idx == 0:
+                medal = "🥇"
+            elif idx == 1:
+                medal = "🥈"
+            elif idx == 2:
+                medal = "🥉"
+            else:
+                medal = f"#{idx+1}"
+            
+            # Цвет полосы прогресса
+            if score >= 80: bar_color = "#10b981"
+            elif score >= 60: bar_color = "#34d399"
+            elif score >= 40: bar_color = "#f59e0b"
+            else: bar_color = "#ef4444"
+            
+            # Создаём колонки для строки
+            c1, c2, c3 = st.columns([5, 2, 1])
+            
+            with c1:
+                # Кликабельная кнопка-имя
+                if st.button(
+                    f"{medal}  {student_name}",
+                    key=f"goto_{student_name}",
+                    use_container_width=True
+                ):
+                    st.session_state.selected_student_from_class = student_name
+                    st.session_state.page = "👤 Ученик"
+                    st.rerun()
+            
+            with c2:
+                st.markdown(f"""
+                <div style="text-align: center; padding-top: 6px;">
+                    <span style="font-size: 20px; font-weight: 700; color: {bar_color};">{score:.0f}</span>
+                    <span style="font-size: 14px; color: #9ca3af;"> баллов</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with c3:
+                st.markdown(f"""
+                <div style="text-align: center; padding-top: 6px; font-size: 22px;">
+                    {level_icon}
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Дополнительно: общий график рейтинга
+        st.markdown("---")
+        st.markdown('<h4 style="color: #1f2937;">📊 Визуальный рейтинг</h4>', unsafe_allow_html=True)
         
         colors_rank = []
         for score in class_df_sorted['forecast_secondary']:
