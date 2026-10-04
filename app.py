@@ -306,9 +306,13 @@ class_data = []
 for _, row in students_df.iterrows():
     sid = row[student_id_col]
     name = row[student_name_col]
-    s_tasks = tasks_df[tasks_df[task_id_col] == sid]
+    s_tasks = tasks_df[tasks_df[task_id_col] == sid].copy()
     
     if not s_tasks.empty:
+        # Преобразуем дату для корректной сортировки
+        s_tasks['date_parsed'] = pd.to_datetime(s_tasks['date'], dayfirst=True, errors='coerce')
+        s_tasks = s_tasks.sort_values('date_parsed', na_position='first')
+        
         forecast = calculate_student_forecast(s_tasks, task_cols)
         
         hw_link = row[hw_link_col] if hw_link_col else None
@@ -702,7 +706,9 @@ else:
         except:
             pass
 
-    student_tasks = tasks_df[tasks_df[task_id_col] == student_id].sort_values('date')
+    student_tasks = tasks_df[tasks_df[task_id_col] == student_id].copy()
+    student_tasks['date_parsed'] = pd.to_datetime(student_tasks['date'], dayfirst=True, errors='coerce')
+    student_tasks = student_tasks.sort_values('date_parsed', na_position='first')
 
     if student_tasks.empty:
         st.warning(f"Нет данных для {selected_student}")
