@@ -222,12 +222,21 @@ def calculate_forecast(scores_history):
         weights = [w / total_weight for w in weights]
     return sum(weights[i] * s for i, s in enumerate(scores_history))
 
-def calculate_student_forecast(student_tasks, task_cols):
+def calculate_student_forecast(student_tasks, task_cols, max_attempts=5):
+    """
+    Рассчитывает прогноз и статистику по последним max_attempts попыткам.
+    
+    - Прогноз балла: по последним 5 попыткам с экспоненциальным весом
+    - Вероятность решения по задаче: только по последним 5 попыткам
+    """
     if student_tasks.empty:
         return {'forecast_primary': 0, 'forecast_secondary': 0,
                 'current_primary': 0, 'current_secondary': 0,
                 'best_primary': 0, 'best_secondary': 0,
                 'scores_history': [], 'task_stats': {}}
+    
+    # Ограничиваем историю последними max_attempts попытками
+    recent_tasks = student_tasks.tail(max_attempts).copy()
     
     scores_history = []
     task_stats = {}
@@ -236,7 +245,8 @@ def calculate_student_forecast(student_tasks, task_cols):
         num = col.replace('task_', '').replace('задание', '').replace('_', '')
         task_stats[num] = {'correct': 0, 'wrong': 0, 'total': 0, 'not_studied': 0}
     
-    for _, row in student_tasks.iterrows():
+    # Считаем статистику по ПОСЛЕДНИМ max_attempts попыткам
+    for _, row in recent_tasks.iterrows():
         primary = 0
         for col in task_cols:
             num = col.replace('task_', '').replace('задание', '').replace('_', '')
@@ -258,9 +268,27 @@ def calculate_student_forecast(student_tasks, task_cols):
                 task_stats[num]['not_studied'] += 1
         scores_history.append(primary)
     
+    # Прогноз на основе последних попыток
     forecast_primary = calculate_forecast(scores_history)
-    current_primary = scores_history[-1] if scores_history else 0
-    best_primary = max(scores_history) if scores_history else 0
+    
+    # Текущий (последний) результат - по всей истории
+    all_scores = []
+    for _, row in student_tasks.iterrows():
+        primary = 0
+        for col in task_cols:
+            num = col.replace('task_', '').replace('задание', '').replace('_', '')
+            task_num_int = int(num) if num.isdigit() else 0
+            weight = 2 if task_num_int in [26, 27] else 1
+            value = row[col]
+            if not pd.isna(value) and value != '' and value != '-' and value != '—' and value != '–':
+                try:
+                    primary += float(value) * weight
+                except:
+                    pass
+        all_scores.append(primary)
+    
+    current_primary = all_scores[-1] if all_scores else 0
+    best_primary = max(all_scores) if all_scores else 0
     
     return {
         'forecast_primary': forecast_primary,
@@ -269,8 +297,9 @@ def calculate_student_forecast(student_tasks, task_cols):
         'current_secondary': convert_to_secondary(round(current_primary)),
         'best_primary': best_primary,
         'best_secondary': convert_to_secondary(round(best_primary)),
-        'scores_history': scores_history,
-        'task_stats': task_stats
+        'scores_history': all_scores,        # полная история (для графика динамики)
+        'recent_scores': scores_history,     # последние 5 (для расчёта)
+        'task_stats': task_stats             # статистика по последним 5
     }
 
 # ==================== ЗАГРУЗКА ДАННЫХ ====================
