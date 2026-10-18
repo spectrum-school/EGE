@@ -976,43 +976,7 @@ if page == "Обзор класса":
             </div>
             """, unsafe_allow_html=True)
     
-    st.markdown("---")
-    
-    # ==================== СВОДНАЯ ТАБЛИЦА ====================
-    st.markdown('<h3>Сводная таблица</h3>', unsafe_allow_html=True)
-    
-    table_data = []
-    for _, row in class_df_sorted.iterrows():
-        level_text, _, _ = get_score_level(row['forecast_secondary'])
-        days_ago = row['days_ago']
-        
-        if days_ago <= 7:
-            activity_text = "Активен"
-        elif days_ago <= 14:
-            activity_text = "Средняя активность"
-        else:
-            activity_text = "Давно не сдавал"
-        
-        last_date = row['last_date']
-        if isinstance(last_date, (pd.Timestamp, datetime)):
-            date_display = pd.Timestamp(last_date).strftime("%d.%m.%Y")
-        elif last_date is not None and not pd.isna(last_date):
-            date_display = str(last_date)
-        else:
-            date_display = "—"
-        
-        table_data.append({
-            "№": len(table_data) + 1,
-            "Ученик": row['name'],
-            "Последний вариант": date_display,
-            "Активность": activity_text,
-            "Прогноз": f"{row['forecast_secondary']:.0f}",
-            "Уровень": level_text,
-            "Прогресс": f"{row['progress']:.0f}%"
-        })
-    
-    df_table = pd.DataFrame(table_data)
-    st.dataframe(df_table, use_container_width=True, hide_index=True)
+
 
 # ==================== СТРАНИЦА: УЧЕНИК ====================
 else:
