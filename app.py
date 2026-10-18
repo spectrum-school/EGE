@@ -696,7 +696,7 @@ if page == "Обзор класса":
     
     st.markdown("---")
     
-    # ==================== РАСЧЁТ ДАВНОСТИ ПОСЛЕДНЕГО ВАРИАНТА ====================
+# ==================== РАСЧЁТ ДАВНОСТИ ПОСЛЕДНЕГО ВАРИАНТА ====================
     today = datetime.now()
     
     for idx_row, row in class_df.iterrows():
@@ -705,11 +705,9 @@ if page == "Обзор класса":
         
         # Пробуем распарсить дату
         if last_date_val is not None and not pd.isna(last_date_val):
-            # Если это уже datetime
             if isinstance(last_date_val, (pd.Timestamp, datetime)):
                 parsed_date = pd.Timestamp(last_date_val).to_pydatetime()
             else:
-                # Если строка
                 try:
                     parsed_date = pd.to_datetime(last_date_val, dayfirst=True).to_pydatetime()
                 except:
@@ -719,14 +717,14 @@ if page == "Обзор класса":
                         parsed_date = None
         
         if parsed_date:
-            days_ago = (today - parsed_date).days
+            days_ago = int((today - parsed_date).days)
         else:
-            days_ago = 9999  # Очень давно / нет данных
+            days_ago = 9999
         
         class_df.at[idx_row, 'days_ago'] = days_ago
     
-    # Сортируем по давности (сначала свежие)
-    class_df_sorted = class_df.sort_values('days_ago', ascending=True).reset_index(drop=True)
+    # Явно приводим к целому
+    class_df['days_ago'] = class_df['days_ago'].astype(int)
     
     # ==================== СТАТИСТИКА АКТИВНОСТИ ====================
     fresh_count = len(class_df[class_df['days_ago'] <= 7])
