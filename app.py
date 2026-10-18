@@ -696,13 +696,49 @@ if page == "Обзор класса":
     
     st.markdown("---")
     
+    # ==================== РАСЧЁТ ДАВНОСТИ ПОСЛЕДНЕГО ВАРИАНТА ====================
+    today = datetime.now()
+    
+    for idx_row, row in class_df.iterrows():
+        last_date_val = row['last_date']
+        parsed_date = None
+        
+        # Пробуем распарсить дату
+        if last_date_val is not None and not pd.isna(last_date_val):
+            # Если это уже datetime
+            if isinstance(last_date_val, (pd.Timestamp, datetime)):
+                parsed_date = pd.Timestamp(last_date_val).to_pydatetime()
+            else:
+                # Если строка
+                try:
+                    parsed_date = pd.to_datetime(last_date_val, dayfirst=True).to_pydatetime()
+                except:
+                    try:
+                        parsed_date = pd.to_datetime(last_date_val).to_pydatetime()
+                    except:
+                        parsed_date = None
+        
+        if parsed_date:
+            days_ago = (today - parsed_date).days
+        else:
+            days_ago = 9999  # Очень давно / нет данных
+        
+        class_df.at[idx_row, 'days_ago'] = days_ago
+    
+    # Сортируем по давности (сначала свежие)
+    class_df_sorted = class_df.sort_values('days_ago', ascending=True).reset_index(drop=True)
+    
+    # ==================== СТАТИСТИКА АКТИВНОСТИ ====================
+    fresh_count = len(class_df[class_df['days_ago'] <= 7])
+    medium_count = len(class_df[(class_df['days_ago'] > 7) & (class_df['days_ago'] <= 14)])
+    stale_count = len(class_df[class_df['days_ago'] > 14])
+    
     class_avg = class_df['forecast_secondary'].mean()
     class_max = class_df['forecast_secondary'].max()
     class_min = class_df['forecast_secondary'].min()
     class_avg_progress = class_df['progress'].mean()
     
-    top_student = class_df_sorted.iloc[0]
-    bottom_student = class_df_sorted.iloc[-1]
+    top_student = class_df.sort_values('forecast_secondary', ascending=False).iloc[0]
     
     avg_level_text, _, avg_card_class = get_score_level(class_avg)
     
@@ -749,86 +785,82 @@ if page == "Обзор класса":
         """, unsafe_allow_html=True)
     
     with col4:
+        # Активность класса
+        total = len(class_df)
+        fresh_pct = (fresh_count / total * 100) if total > 0 else 0
+        
+        if fresh_pct >= 70:
+            act_card = "card-excellent"
+            act_color = "#047857"
+        elif fresh_pct >= 40:
+            act_card = "card-medium"
+            act_color = "#B45309"
+        else:
+            act_card = "card-low"
+            act_color = "#B91C1C"
+        
         st.markdown(f"""
-        <div class="card card-low">
-            <div class="card-title">Требует внимания</div>
-            <div class="card-value" style="color: #B91C1C;">{bottom_student['forecast_secondary']:.0f}</div>
-            <div class="card-sub" style="font-size: 14px; color: #1F2937; font-weight: 600;">{bottom_student['name']}</div>
+        <div class="card {act_card}">
+            <div class="card-title">Активность класса</div>
+            <div class="card-value" style="color: {act_color};">{fresh_count}/{total}</div>
+            <div class="card-sub">сдали за последние 7 дней</div>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    st.markdown('<h3>Распределение по уровням</h3>', unsafe_allow_html=True)
+    # ==================== РАСПРЕДЕЛЕНИЕ ПО АКТИВНОСТИ ====================
+    st.markdown('<h3>Распределение по активности</h3>', unsafe_allow_html=True)
     
-    excellent = len(class_df[class_df['forecast_secondary'] >= 80])
-    good = len(class_df[(class_df['forecast_secondary'] >= 60) & (class_df['forecast_secondary'] < 80)])
-    medium = len(class_df[(class_df['forecast_secondary'] >= 40) & (class_df['forecast_secondary'] < 60)])
-    low = len(class_df[class_df['forecast_secondary'] < 40])
-    
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.markdown(f"""
         <div class="card card-excellent">
-            <div class="card-title">Отлично (80+)</div>
-            <div class="card-value" style="color: #047857;">{excellent}</div>
-            <div class="card-sub">{excellent/len(class_df)*100:.0f}% класса</div>
+            <div class="card-title">Активные (до 7 дней)</div>
+            <div class="card-value" style="color: #047857;">{fresh_count}</div>
+            <div class="card-sub">{fresh_count/len(class_df)*100:.0f}% класса</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown(f"""
-        <div class="card card-good">
-            <div class="card-title">Хорошо (60-79)</div>
-            <div class="card-value" style="color: #047857;">{good}</div>
-            <div class="card-sub">{good/len(class_df)*100:.0f}% класса</div>
+        <div class="card card-medium">
+            <div class="card-title">Средняя активность (7-14 дней)</div>
+            <div class="card-value" style="color: #B45309;">{medium_count}</div>
+            <div class="card-sub">{medium_count/len(class_df)*100:.0f}% класса</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         st.markdown(f"""
-        <div class="card card-medium">
-            <div class="card-title">Средне (40-59)</div>
-            <div class="card-value" style="color: #B45309;">{medium}</div>
-            <div class="card-sub">{medium/len(class_df)*100:.0f}% класса</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown(f"""
         <div class="card card-low">
-            <div class="card-title">Внимание (&lt;40)</div>
-            <div class="card-value" style="color: #B91C1C;">{low}</div>
-            <div class="card-sub">{low/len(class_df)*100:.0f}% класса</div>
+            <div class="card-title">Давно не сдавали (14+ дней)</div>
+            <div class="card-value" style="color: #B91C1C;">{stale_count}</div>
+            <div class="card-sub">{stale_count/len(class_df)*100:.0f}% класса</div>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    col_left, col_right = st.columns([3, 2])
+    # ==================== РЕЙТИНГ ПО АКТИВНОСТИ ====================
+    st.markdown('<h3>Активность учеников</h3>', unsafe_allow_html=True)
+    st.markdown('<p style="color: #6B7280; font-size: 13px; margin-bottom: 12px;">Отсортировано по давности последнего сданного варианта. Нажмите на имя, чтобы открыть статистику.</p>', unsafe_allow_html=True)
     
-    with col_left:
-        st.markdown('<h3>Рейтинг класса</h3>', unsafe_allow_html=True)
-        st.markdown('<p style="color: #6B7280; font-size: 13px; margin-bottom: 12px;">Нажмите на имя ученика, чтобы открыть его статистику</p>', unsafe_allow_html=True)
+    # Генерируем CSS для кнопок
+    css_rank = "<style>"
+    for idx, row in class_df_sorted.iterrows():
+        days_ago = row['days_ago']
         
-        # Генерируем CSS для каждой кнопки по имени (используем data-атрибут через key)
-        # Streamlit добавляет класс st-key-{key} к обёртке, key = f"rank_btn_{i}"
-        css_rank = "<style>"
-        for idx, row in class_df_sorted.iterrows():
-            score = row['forecast_secondary']
-            
-            if score >= 80:
-                bg, border, text, hover = "#F0FDF4", "#059669", "#047857", "#DCFCE7"
-            elif score >= 60:
-                bg, border, text, hover = "#F0FDF4", "#10B981", "#047857", "#DCFCE7"
-            elif score >= 40:
-                bg, border, text, hover = "#FFFBEB", "#D97706", "#B45309", "#FEF3C7"
-            else:
-                bg, border, text, hover = "#FEF2F2", "#DC2626", "#B91C1C", "#FEE2E2"
-            
-            css_rank += f"""
-        .st-key-rank_btn_{idx} button {{
+        if days_ago <= 7:
+            bg, border, text, hover = "#F0FDF4", "#059669", "#047857", "#DCFCE7"
+        elif days_ago <= 14:
+            bg, border, text, hover = "#FFFBEB", "#D97706", "#B45309", "#FEF3C7"
+        else:
+            bg, border, text, hover = "#FEF2F2", "#DC2626", "#B91C1C", "#FEE2E2"
+        
+        css_rank += f"""
+        .st-key-act_btn_{idx} button {{
             background: {bg} !important;
             border: 2px solid {border} !important;
             color: {text} !important;
@@ -841,143 +873,141 @@ if page == "Обзор класса":
             transition: all 0.2s !important;
             box-shadow: none !important;
         }}
-        .st-key-rank_btn_{idx} button:hover {{
+        .st-key-act_btn_{idx} button:hover {{
             background: {hover} !important;
             border-color: {border} !important;
             color: {text} !important;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
         }}
-        .st-key-rank_btn_{idx} button:focus {{
+        .st-key-act_btn_{idx} button:focus {{
             background: {bg} !important;
             border-color: {border} !important;
             color: {text} !important;
             box-shadow: 0 0 0 3px {border}33 !important;
         }}
         """
-        css_rank += "</style>"
-        st.markdown(css_rank, unsafe_allow_html=True)
+    css_rank += "</style>"
+    st.markdown(css_rank, unsafe_allow_html=True)
+    
+    for idx, row in class_df_sorted.iterrows():
+        student_name = row['name']
+        score = row['forecast_secondary']
+        days_ago = row['days_ago']
+        last_date = row['last_date']
         
-        for idx, row in class_df_sorted.iterrows():
-            student_name = row['name']
-            score = row['forecast_secondary']
-            level_text, _, _ = get_score_level(score)
-            
-            if score >= 80:
-                text_color = "#047857"
-                chip_bg = "#F0FDF4"
-                chip_border = "#059669"
-            elif score >= 60:
-                text_color = "#047857"
-                chip_bg = "#F0FDF4"
-                chip_border = "#10B981"
-            elif score >= 40:
-                text_color = "#B45309"
-                chip_bg = "#FFFBEB"
-                chip_border = "#D97706"
+        if days_ago <= 7:
+            text_color = "#047857"
+            chip_bg = "#F0FDF4"
+            chip_border = "#059669"
+            if days_ago == 0:
+                days_text = "Сегодня"
+            elif days_ago == 1:
+                days_text = "1 день назад"
             else:
-                text_color = "#B91C1C"
-                chip_bg = "#FEF2F2"
-                chip_border = "#DC2626"
-            
-            c1, c2 = st.columns([5, 2])
-            
-            with c1:
-                if st.button(
-                    f"{idx+1}.  {student_name}",
-                    key=f"rank_btn_{idx}",
-                    use_container_width=True
-                ):
-                    st.session_state.selected_student_from_class = student_name
-                    st.session_state.page = "Ученик"
-                    st.rerun()
-            
-            with c2:
-                # Единый блок с баллом и уровнем одинакового размера
-                st.markdown(f"""
-                <div style="
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 10px;
-                    background: {chip_bg};
-                    border: 2px solid {chip_border};
-                    border-radius: 10px;
-                    padding: 12px 14px;
-                    height: 52px;
-                    box-sizing: border-box;
-                ">
-                    <span style="font-size: 20px; font-weight: 700; color: {text_color}; line-height: 1;">
-                        {score:.0f}
+                days_text = f"{days_ago} дн. назад"
+        elif days_ago <= 14:
+            text_color = "#B45309"
+            chip_bg = "#FFFBEB"
+            chip_border = "#D97706"
+            days_text = f"{days_ago} дн. назад"
+        else:
+            text_color = "#B91C1C"
+            chip_bg = "#FEF2F2"
+            chip_border = "#DC2626"
+            if days_ago >= 9999:
+                days_text = "Нет данных"
+            else:
+                days_text = f"{days_ago} дн. назад"
+        
+        # Форматируем дату для отображения
+        if isinstance(last_date, str):
+            date_display = last_date
+        elif isinstance(last_date, (pd.Timestamp, datetime)):
+            date_display = pd.Timestamp(last_date).strftime("%d.%m.%Y")
+        elif last_date is not None and not pd.isna(last_date):
+            date_display = str(last_date)
+        else:
+            date_display = "—"
+        
+        c1, c2 = st.columns([5, 2])
+        
+        with c1:
+            if st.button(
+                f"{idx+1}.  {student_name}",
+                key=f"act_btn_{idx}",
+                use_container_width=True
+            ):
+                st.session_state.selected_student_from_class = student_name
+                st.session_state.page = "Ученик"
+                st.rerun()
+        
+        with c2:
+            st.markdown(f"""
+            <div style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                background: {chip_bg};
+                border: 2px solid {chip_border};
+                border-radius: 10px;
+                padding: 10px 14px;
+                height: 52px;
+                box-sizing: border-box;
+                gap: 8px;
+            ">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <span style="font-size: 14px; font-weight: 700; color: {text_color}; line-height: 1;">
+                        {days_text}
                     </span>
-                    <span style="
-                        font-size: 10px;
-                        font-weight: 700;
-                        color: {text_color};
-                        text-transform: uppercase;
-                        letter-spacing: 0.03em;
-                        line-height: 1.2;
-                        text-align: left;
-                    ">
-                        {level_text}
+                    <span style="font-size: 10px; color: #9CA3AF; line-height: 1;">
+                        {date_display}
                     </span>
                 </div>
-                """, unsafe_allow_html=True)
-    
-    with col_right:
-        st.markdown('<h3>Домашние задания</h3>', unsafe_allow_html=True)
-        
-        hw_done_count = class_df['hw_done'].sum()
-        hw_total = len(class_df)
-        hw_percent = (hw_done_count / hw_total * 100) if hw_total > 0 else 0
-        
-        hw_card_class = "card-excellent" if hw_percent >= 80 else "card-medium" if hw_percent >= 50 else "card-low"
-        
-        st.markdown(f"""
-        <div class="card {hw_card_class}">
-            <div class="card-title">Выполнено</div>
-            <div class="card-value" style="color: #047857;">{hw_done_count} / {hw_total}</div>
-            <div class="card-sub">{hw_percent:.0f}% класса выполнили домашнее задание</div>
-            <div class="status-bar">
-                <div class="status-bar-fill" style="width: {hw_percent}%; background: linear-gradient(90deg, #059669, #10B981);"></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        not_done = class_df[~class_df['hw_done']]['name'].tolist()
-        
-        if not_done:
-            items_html = ''.join(f'<div style="color: #1F2937; font-size: 14px; padding: 8px 0; border-bottom: 1px solid #FECACA; font-weight: 500;">{n}</div>' for n in not_done)
-            st.markdown(f"""
-            <div style="background: #FEF2F2; border-radius: 12px; padding: 18px 20px; border: 2px solid #FECACA; border-left: 6px solid #DC2626;">
-                <p style="margin: 0 0 10px 0; font-weight: 700; color: #B91C1C; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Не выполнили ({len(not_done)})</p>
-                <div>{items_html}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div style="background: #F0FDF4; border-radius: 12px; padding: 18px 20px; border: 2px solid #A7F3D0; border-left: 6px solid #059669;">
-                <p style="margin: 0; font-weight: 700; color: #047857; font-size: 15px;">Все выполнили домашнее задание</p>
+                <span style="
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: {text_color};
+                    line-height: 1;
+                ">
+                    {score:.0f}
+                </span>
             </div>
             """, unsafe_allow_html=True)
     
     st.markdown("---")
     
+    # ==================== СВОДНАЯ ТАБЛИЦА ====================
     st.markdown('<h3>Сводная таблица</h3>', unsafe_allow_html=True)
     
     table_data = []
     for _, row in class_df_sorted.iterrows():
         level_text, _, _ = get_score_level(row['forecast_secondary'])
-        hw_status_text = "Выполнено" if row['hw_done'] else "Не выполнено"
+        days_ago = row['days_ago']
+        
+        if days_ago <= 7:
+            activity_text = "Активен"
+        elif days_ago <= 14:
+            activity_text = "Средняя активность"
+        else:
+            activity_text = "Давно не сдавал"
+        
+        last_date = row['last_date']
+        if isinstance(last_date, (pd.Timestamp, datetime)):
+            date_display = pd.Timestamp(last_date).strftime("%d.%m.%Y")
+        elif last_date is not None and not pd.isna(last_date):
+            date_display = str(last_date)
+        else:
+            date_display = "—"
         
         table_data.append({
             "№": len(table_data) + 1,
             "Ученик": row['name'],
+            "Последний вариант": date_display,
+            "Активность": activity_text,
             "Прогноз": f"{row['forecast_secondary']:.0f}",
             "Уровень": level_text,
-            "Прогресс": f"{row['progress']:.0f}%",
-            "Попыток": row['attempts'],
-            "ДЗ": hw_status_text
+            "Прогресс": f"{row['progress']:.0f}%"
         })
     
     df_table = pd.DataFrame(table_data)
