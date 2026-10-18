@@ -696,7 +696,7 @@ if page == "Обзор класса":
     
     st.markdown("---")
     
-# ==================== РАСЧЁТ ДАВНОСТИ ПОСЛЕДНЕГО ВАРИАНТА ====================
+    # ==================== РАСЧЁТ ДАВНОСТИ ПОСЛЕДНЕГО ВАРИАНТА ====================
     today = datetime.now()
     
     for idx_row, row in class_df.iterrows():
@@ -725,6 +725,9 @@ if page == "Обзор класса":
     
     # Явно приводим к целому
     class_df['days_ago'] = class_df['days_ago'].astype(int)
+    
+    # Сортируем по давности (сначала свежие)
+    class_df_sorted = class_df.sort_values('days_ago', ascending=True).reset_index(drop=True)
     
     # ==================== СТАТИСТИКА АКТИВНОСТИ ====================
     fresh_count = len(class_df[class_df['days_ago'] <= 7])
