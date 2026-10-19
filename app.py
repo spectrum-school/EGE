@@ -844,14 +844,41 @@ if page == "Обзор класса":
     
     st.markdown("---")
     
-    # ==================== РЕЙТИНГ ПО АКТИВНОСТИ ====================
+       # ==================== РЕЙТИНГ ПО АКТИВНОСТИ ====================
     st.markdown('<h3>Активность учеников</h3>', unsafe_allow_html=True)
-    st.markdown('<p style="color: #6B7280; font-size: 13px; margin-bottom: 12px;">Отсортировано по давности последнего сданного варианта. Нажмите на имя, чтобы открыть статистику.</p>', unsafe_allow_html=True)
+    
+    # Выбор сортировки
+    sort_col1, sort_col2 = st.columns([3, 1])
+    with sort_col2:
+        sort_by = st.selectbox(
+            "Сортировка",
+            ["По активности", "По прогнозу"],
+            label_visibility="collapsed"
+        )
+    
+    if sort_by == "По активности":
+        sort_label = "Сначала сдавшие недавно"
+        sorted_df = class_df_sorted.copy()
+    else:
+        sort_label = "Сначала с высоким прогнозом"
+        sorted_df = class_df.sort_values('forecast_secondary', ascending=False).reset_index(drop=True)
+    
+    with sort_col1:
+        st.markdown(f'<p style="color: #6B7280; font-size: 13px; margin: 8px 0 12px 0;">{sort_label}. Нажмите на имя, чтобы открыть статистику.</p>', unsafe_allow_html=True)
+    
+    # Заголовки столбцов
+    h1, h2, h3 = st.columns([5, 3, 2])
+    with h1:
+        st.markdown('<p style="color: #6B7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px 0;">Ученик</p>', unsafe_allow_html=True)
+    with h2:
+        st.markdown('<p style="color: #6B7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px 0; text-align: center;">Последняя активность</p>', unsafe_allow_html=True)
+    with h3:
+        st.markdown('<p style="color: #6B7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px 0; text-align: center;">Прогноз</p>', unsafe_allow_html=True)
     
     # Генерируем CSS для кнопок
     css_rank = "<style>"
-    for idx, row in class_df_sorted.iterrows():
-        days_ago = row['days_ago']
+    for idx, row in sorted_df.iterrows():
+        days_ago = int(row['days_ago'])
         
         if days_ago <= 7:
             bg, border, text, hover = "#F0FDF4", "#059669", "#047857", "#DCFCE7"
@@ -891,16 +918,17 @@ if page == "Обзор класса":
     css_rank += "</style>"
     st.markdown(css_rank, unsafe_allow_html=True)
     
-    for idx, row in class_df_sorted.iterrows():
+    for idx, row in sorted_df.iterrows():
         student_name = row['name']
         score = row['forecast_secondary']
-        days_ago = row['days_ago']
+        days_ago = int(row['days_ago'])
         last_date = row['last_date']
         
+        # === Столбец 2: последняя активность ===
         if days_ago <= 7:
-            text_color = "#047857"
-            chip_bg = "#F0FDF4"
-            chip_border = "#059669"
+            act_text_color = "#047857"
+            act_bg = "#F0FDF4"
+            act_border = "#059669"
             if days_ago == 0:
                 days_text = "Сегодня"
             elif days_ago == 1:
@@ -908,30 +936,46 @@ if page == "Обзор класса":
             else:
                 days_text = f"{days_ago} дн. назад"
         elif days_ago <= 14:
-            text_color = "#B45309"
-            chip_bg = "#FFFBEB"
-            chip_border = "#D97706"
+            act_text_color = "#B45309"
+            act_bg = "#FFFBEB"
+            act_border = "#D97706"
             days_text = f"{days_ago} дн. назад"
         else:
-            text_color = "#B91C1C"
-            chip_bg = "#FEF2F2"
-            chip_border = "#DC2626"
+            act_text_color = "#B91C1C"
+            act_bg = "#FEF2F2"
+            act_border = "#DC2626"
             if days_ago >= 9999:
                 days_text = "Нет данных"
             else:
                 days_text = f"{days_ago} дн. назад"
         
-        # Форматируем дату для отображения
-        if isinstance(last_date, str):
-            date_display = last_date
-        elif isinstance(last_date, (pd.Timestamp, datetime)):
+        # Форматируем дату
+        if isinstance(last_date, (pd.Timestamp, datetime)):
             date_display = pd.Timestamp(last_date).strftime("%d.%m.%Y")
         elif last_date is not None and not pd.isna(last_date):
             date_display = str(last_date)
         else:
             date_display = "—"
         
-        c1, c2 = st.columns([5, 2])
+        # === Столбец 3: прогноз ===
+        if score >= 80:
+            score_text_color = "#047857"
+            score_bg = "#F0FDF4"
+            score_border = "#059669"
+        elif score >= 60:
+            score_text_color = "#047857"
+            score_bg = "#F0FDF4"
+            score_border = "#10B981"
+        elif score >= 40:
+            score_text_color = "#B45309"
+            score_bg = "#FFFBEB"
+            score_border = "#D97706"
+        else:
+            score_text_color = "#B91C1C"
+            score_bg = "#FEF2F2"
+            score_border = "#DC2626"
+        
+        c1, c2, c3 = st.columns([5, 3, 2])
         
         with c1:
             if st.button(
@@ -947,37 +991,43 @@ if page == "Обзор класса":
             st.markdown(f"""
             <div style="
                 display: flex;
+                flex-direction: column;
                 align-items: center;
-                justify-content: space-between;
-                background: {chip_bg};
-                border: 2px solid {chip_border};
+                justify-content: center;
+                background: {act_bg};
+                border: 2px solid {act_border};
                 border-radius: 10px;
-                padding: 10px 14px;
+                padding: 8px 12px;
                 height: 52px;
                 box-sizing: border-box;
-                gap: 8px;
+                gap: 2px;
             ">
-                <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <span style="font-size: 14px; font-weight: 700; color: {text_color}; line-height: 1;">
-                        {days_text}
-                    </span>
-                    <span style="font-size: 10px; color: #9CA3AF; line-height: 1;">
-                        {date_display}
-                    </span>
-                </div>
-                <span style="
-                    font-size: 20px;
-                    font-weight: 700;
-                    color: {text_color};
-                    line-height: 1;
-                ">
+                <span style="font-size: 14px; font-weight: 700; color: {act_text_color}; line-height: 1.2;">
+                    {days_text}
+                </span>
+                <span style="font-size: 10px; color: #9CA3AF; line-height: 1;">
+                    {date_display}
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with c3:
+            st.markdown(f"""
+            <div style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: {score_bg};
+                border: 2px solid {score_border};
+                border-radius: 10px;
+                height: 52px;
+                box-sizing: border-box;
+            ">
+                <span style="font-size: 22px; font-weight: 700; color: {score_text_color}; line-height: 1;">
                     {score:.0f}
                 </span>
             </div>
             """, unsafe_allow_html=True)
-    
-
-
 # ==================== СТРАНИЦА: УЧЕНИК ====================
 else:
     student_row = students_df[students_df[student_name_col] == selected_student]
