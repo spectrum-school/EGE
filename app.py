@@ -432,7 +432,78 @@ st.markdown("""
         .level-text { font-size: 14px !important; }
     }
 
-
+    /* ==================== МОБИЛЬНАЯ АДАПТАЦИЯ РЕЙТИНГА АКТИВНОСТИ ==================== */
+    /* Принудительно держим 3 колонки в строке на узких экранах */
+    @media only screen and (max-width: 900px) {
+        /* Контейнер колонок рейтинга — по ключу кнопки */
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 4px !important;
+            align-items: stretch !important;
+            width: 100% !important;
+        }
+        
+        /* Сами колонки — не схлопываем */
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) > div[data-testid="column"],
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) > div[data-testid="stColumn"] {
+            display: block !important;
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        /* Первая колонка чуть шире */
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) > div[data-testid="column"]:first-child,
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) > div[data-testid="stColumn"]:first-child {
+            flex: 2 1 0 !important;
+        }
+        
+        /* Кнопки — компактные */
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) .stButton {
+            width: 100% !important;
+        }
+        
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) .stButton button {
+            padding: 6px 5px !important;
+            font-size: 11px !important;
+            line-height: 1.15 !important;
+            min-height: 52px !important;
+            height: 52px !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            width: 100% !important;
+        }
+        
+        /* Блоки активности и прогноза — не растягиваем на всю ширину */
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) div[style*="height: 52px"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 4px 3px !important;
+        }
+        
+        /* Уменьшаем шрифты внутри блоков */
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) div[style*="height: 52px"] span {
+            font-size: 11px !important;
+        }
+        
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) div[style*="height: 52px"] span[style*="font-size: 22px"] {
+            font-size: 15px !important;
+        }
+        
+        /* Скрываем дату на очень узких экранах, чтобы не теснилось */
+        @media (max-width: 500px) {
+            section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) div[style*="height: 52px"] span[style*="font-size: 10px"] {
+                display: none !important;
+            }
+        }
+    }
 
 </style>
 """, unsafe_allow_html=True)
