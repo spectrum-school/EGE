@@ -431,6 +431,42 @@ st.markdown("""
         .level-container { font-size: 14px !important; padding: 6px 12px; min-width: 140px; }
         .level-text { font-size: 14px !important; }
     }
+
+
+      /* ==================== МОБИЛЬНАЯ АДАПТАЦИЯ РЕЙТИНГА ==================== */
+    @media only screen and (max-width: 768px) {
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) {
+            flex-wrap: nowrap !important;
+            gap: 3px !important;
+            align-items: stretch !important;
+        }
+        
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) > div[data-testid="column"] {
+            min-width: 0 !important;
+            flex: 1 1 auto !important;
+            padding: 0 !important;
+        }
+        
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) .stButton button {
+            padding: 6px 4px !important;
+            font-size: 11px !important;
+            line-height: 1.15 !important;
+            min-height: 52px !important;
+            height: 52px !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+        }
+        
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) div[style*="height: 52px"] span {
+            font-size: 12px !important;
+        }
+        
+        section.main div[data-testid="stHorizontalBlock"]:has(.st-key-act_btn_0) div[style*="height: 52px"] span[style*="font-size: 22px"] {
+            font-size: 16px !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
